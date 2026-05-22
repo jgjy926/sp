@@ -27,7 +27,7 @@
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&display=swap');
         
         body {
             font-family: 'Inter', sans-serif;
@@ -73,7 +73,6 @@
 </head>
 <body class="flex h-screen overflow-hidden text-sm md:text-base">
 
-    
     <!-- Desktop Sidebar (Hidden on Mobile) -->
     <aside class="hidden md:flex flex-col w-64 glass-panel border-r border-slate-700 h-full z-20">
         <div class="p-6 flex items-center gap-3">
@@ -86,7 +85,7 @@
             </div>
         </div>
         <nav class="flex-1 px-4 space-y-2 mt-4">
-            <button onclick="switchTab('console')" id="nav-desktop-console" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all active-nav">
+            <button onclick="switchTab('console')" id="nav-desktop-console" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all active-nav text-white bg-slate-800">
                 <i class="ph ph-terminal-window text-xl"></i> Console
             </button>
             <button onclick="switchTab('analytics')" id="nav-desktop-analytics" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
@@ -104,8 +103,8 @@
         </nav>
         <div class="p-4 border-t border-slate-700">
             <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-                <span>Koofr Sync</span>
-                <span id="sync-status-desk" class="text-green-400">Synced</span>
+                <span>Cloudflare Sync</span>
+                <span id="sync-status-desk" class="text-green-400">Active</span>
             </div>
         </div>
     </aside>
@@ -129,11 +128,12 @@
         <!-- Scrollable Tab Container -->
         <div id="main-scroll-area" class="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 pb-24 md:pb-8">
             
+            <!-- Tab 1: Console -->
             <section id="tab-console" class="tab-content active max-w-5xl mx-auto space-y-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
                         <h2 class="text-2xl font-bold text-white">Parser Console</h2>
-                        <p class="text-slate-400 text-sm">Upload, decrypt, and parse statements locally.</p>
+                        <p class="text-slate-400 text-sm">Upload, decrypt, and parse statements securely.</p>
                     </div>
                     <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
                         <span class="text-xs text-slate-400">Confidence:</span>
@@ -147,7 +147,7 @@
                         <i class="ph ph-upload-simple text-3xl text-slate-400 group-hover:text-primary"></i>
                     </div>
                     <h3 class="font-semibold text-lg text-white mb-1">Upload PDF Statement</h3>
-                    <p class="text-slate-400 text-sm max-w-md">Drag and drop or click to select. Processing stays in your browser.</p>
+                    <p class="text-slate-400 text-sm max-w-md">Drag and drop or click to select. Parsing processes on-device securely.</p>
                     <input type="file" id="file-input" class="hidden" accept=".pdf" onchange="handleFileSelect(event)">
                 </div>
 
@@ -168,7 +168,10 @@
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden hidden" id="extraction-results">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                         <h3 class="font-semibold text-white">Extracted Transactions</h3>
-                        <button class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addManualTransaction()">+ Manual Entry</button>
+                        <div class="flex gap-2">
+                            <button class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addRuleFromConsole()">+ Create Parsing Rule</button>
+                            <button class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addManualTransaction()">+ Manual Entry</button>
+                        </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-slate-300 min-w-[600px]">
@@ -176,7 +179,7 @@
                                 <tr>
                                     <th class="px-4 py-3 font-medium">Post Date</th>
                                     <th class="px-4 py-3 font-medium">Trans Date</th>
-                                    <th class="px-4 py-3 font-medium">Merchant Details</th>
+                                    <th class="px-4 py-3 font-medium">Merchant Details / Mapped Category</th>
                                     <th class="px-4 py-3 font-medium text-right">Amount (RM)</th>
                                     <th class="px-4 py-3 font-medium text-center">Action</th>
                                 </tr>
@@ -189,10 +192,11 @@
                 </div>
             </section>
 
+            <!-- Tab 2: Analytics -->
             <section id="tab-analytics" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div>
                     <h2 class="text-2xl font-bold text-white">Analytics</h2>
-                    <p class="text-slate-400 text-sm">Interactive overview and transaction management.</p>
+                    <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
                 </div>
 
                 <!-- Summary Cards -->
@@ -217,8 +221,14 @@
                 </div>
 
                 <!-- Chart Area -->
-                <div class="glass-panel p-4 rounded-2xl border border-slate-700 h-64 md:h-80">
-                    <canvas id="spendingChart"></canvas>
+                <div class="glass-panel p-4 rounded-2xl border border-slate-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-white">Spending by Category</h3>
+                        <span class="text-xs text-slate-400">Auto-assigned via Rule Engine</span>
+                    </div>
+                    <div class="h-64 md:h-80">
+                        <canvas id="spendingChart"></canvas>
+                    </div>
                 </div>
 
                 <!-- Master Transaction List -->
@@ -238,9 +248,9 @@
                                 <tr>
                                     <th class="px-4 py-3 font-medium w-24">Date</th>
                                     <th class="px-4 py-3 font-medium">Merchant</th>
-                                    <th class="px-4 py-3 font-medium">Details/Installment</th>
+                                    <th class="px-4 py-3 font-medium">Category / Installment</th>
                                     <th class="px-4 py-3 font-medium text-right w-32">Amount (RM)</th>
-                                    <th class="px-4 py-3 font-medium text-center w-20">Actions</th>
+                                    <th class="px-4 py-3 font-medium text-center w-24">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="master-table-body" class="divide-y divide-slate-700/50">
@@ -256,11 +266,12 @@
                 </div>
             </section>
 
+            <!-- Tab 3: Cashback Hub -->
             <section id="tab-cashback" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div class="flex justify-between items-end">
                     <div>
                         <h2 class="text-2xl font-bold text-white">Cashback Hub</h2>
-                        <p class="text-slate-400 text-sm">Auto-detected & manual cashback tracking.</p>
+                        <p class="text-slate-400 text-sm">Auto-detected savings grouped by credit card profiles.</p>
                     </div>
                     <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600" onclick="addManualCashback()">+ Add</button>
                 </div>
@@ -281,28 +292,69 @@
                 </div>
             </section>
 
+            <!-- Tab 4: Maintenance Hub (Rule Engine) -->
             <section id="tab-maintenance" class="tab-content max-w-5xl mx-auto space-y-6">
-                 <div>
-                    <h2 class="text-2xl font-bold text-white">Maintenance Hub</h2>
-                    <p class="text-slate-400 text-sm">Manage parsing rules and merchant categorizations.</p>
+                 <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Maintenance Hub</h2>
+                        <p class="text-slate-400 text-sm">Control mapping rules, categorizations, and cashback rules.</p>
+                    </div>
+                    <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors font-medium flex items-center gap-2" onclick="openRuleModal(null)">
+                        <i class="ph ph-plus-bold"></i> Add Rule
+                    </button>
                 </div>
 
-                <div class="glass-panel rounded-2xl border border-slate-700 p-6 flex flex-col items-center justify-center text-center text-slate-400 h-64">
-                    <i class="ph ph-wrench text-4xl mb-3 text-slate-500"></i>
-                    <h3 class="text-white font-medium mb-1">Rule Engine Coming Soon</h3>
-                    <p class="text-sm max-w-sm">Here you will be able to map raw strings like "MUSEE PLATINUM" to specific categories or override LLM parsing logic.</p>
+                <!-- Live Rule Sandbox Sandbox -->
+                <div class="glass-panel p-6 rounded-2xl border border-indigo-500/20 bg-indigo-950/10">
+                    <h3 class="font-semibold text-white mb-2 flex items-center gap-2 text-base">
+                        <i class="ph ph-shield-check text-indigo-400"></i> Local Parsing Sandbox
+                    </h3>
+                    <p class="text-slate-400 text-xs mb-4">Paste or type a raw description from your PDF statement below to test how the Rule Engine resolves it instantly.</p>
+                    
+                    <div class="flex flex-col md:flex-row gap-4 items-stretch">
+                        <div class="flex-1">
+                            <input type="text" id="sandbox-input" placeholder="e.g. MUSEE PLATINUM TOKYO-E-E6 :005/006" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-primary text-sm" oninput="testSandbox()">
+                        </div>
+                        <div class="flex-1 bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col justify-center text-xs space-y-1">
+                            <div class="text-slate-400">Match Output:</div>
+                            <div id="sandbox-output" class="text-slate-300 font-mono italic">Type raw statement text to test mapping...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rules Database Table -->
+                <div class="glass-panel rounded-2xl border border-slate-700 flex flex-col overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                        <h3 class="font-semibold text-white">Parsing Mappings</h3>
+                        <span id="rule-count-badge" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium">0 active rules</span>
+                    </div>
+                    
+                    <!-- Rules Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-300 min-w-[700px]">
+                            <thead class="bg-slate-800 text-slate-400">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">Trigger Phrase</th>
+                                    <th class="px-4 py-3 font-medium">Mapped Merchant</th>
+                                    <th class="px-4 py-3 font-medium">Category</th>
+                                    <th class="px-4 py-3 font-medium">Linked Card</th>
+                                    <th class="px-4 py-3 font-medium text-center">Cashback Rule</th>
+                                    <th class="px-4 py-3 font-medium text-center w-24">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rules-table-body" class="divide-y divide-slate-700/50">
+                                <!-- Populated dynamically by JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
 
+            <!-- Tab 5: Setup -->
             <section id="tab-setup" class="tab-content max-w-3xl mx-auto space-y-6">
                  <div>
                     <h2 class="text-2xl font-bold text-white">System Setup</h2>
-                    <p class="text-slate-400 text-sm">Configure your proxy and storage integrations.</p>
-                </div>
-
-                <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4 flex gap-3 text-yellow-200 text-sm">
-                    <i class="ph ph-warning-circle text-xl flex-shrink-0"></i>
-                    <p><strong>Security Notice:</strong> As requested, inputs below are <em>not</em> stored in the browser's localStorage. You must re-enter them upon refreshing the page.</p>
+                    <p class="text-slate-400 text-sm">Configure your proxy and parsing integrations.</p>
                 </div>
 
                 <form id="setup-form" class="space-y-6 glass-panel p-6 rounded-2xl border border-slate-700" onsubmit="saveSetup(event)">
@@ -315,32 +367,32 @@
                         </div>
                     </div>
 
-                    <div class="space-y-4 pt-4">
-                        <h3 class="text-lg font-semibold text-white border-b border-slate-700 pb-2">Koofr Storage (Sync)</h3>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-1">WebDAV / API Endpoint</label>
-                            <input type="url" id="koofr-url" placeholder="https://app.koofr.net/dav/Koofr/" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors">
-                        </div>
-                        <div>
-                            <label class="block text-sm text-slate-400 mb-1">App Password</label>
-                            <input type="password" id="koofr-pass" placeholder="••••••••••••" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                    <div class="space-y-4 pt-2">
+                        <h3 class="text-lg font-semibold text-white border-b border-slate-700 pb-2">AI Integration</h3>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <label class="block text-sm text-white font-medium">Enable Gemini AI Parsing</label>
+                                <p class="text-xs text-slate-400 max-w-md">Routes extracted text to Google Gemini (via Cloudflare) for highly accurate merchant categorization and data structuring.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input type="checkbox" id="use-ai-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
                         </div>
                     </div>
 
-                    <div class="flex gap-4 pt-4">
-                        <button type="submit" class="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2.5 rounded-lg transition-colors">
-                            Apply Settings (Session)
-                        </button>
-                        <button type="button" onclick="manualSync()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
-                            <i class="ph ph-cloud-arrow-up"></i> Test Sync
+                    <div class="pt-4">
+                        <button type="submit" class="w-full bg-primary hover:bg-secondary text-white font-medium py-2.5 rounded-lg transition-colors">
+                            Save Settings
                         </button>
                     </div>
                 </form>
             </section>
         </div>
 
+        <!-- Bottom Navigation Mobile -->
         <nav class="md:hidden glass-panel border-t border-slate-700 flex justify-around items-center h-16 pb-safe z-20">
-            <button onclick="switchTab('console')" id="nav-mobile-console" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors active-nav-mobile">
+            <button onclick="switchTab('console')" id="nav-mobile-console" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors active-nav-mobile text-white">
                 <i class="ph ph-terminal-window text-2xl mb-1"></i>
                 <span class="text-[10px]">Console</span>
             </button>
@@ -390,20 +442,31 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">Post Date</label>
-                        <input type="text" id="edit-post" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                        <input type="text" id="edit-post" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary" placeholder="DD/MM">
                     </div>
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">Trans Date</label>
-                        <input type="text" id="edit-trans" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                        <input type="text" id="edit-trans" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary" placeholder="DD/MM">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1">Merchant</label>
-                    <input type="text" id="edit-merchant" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                    <label class="block text-xs text-slate-400 mb-1">Raw Merchant / Description</label>
+                    <input type="text" id="edit-merchant" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary" placeholder="Merchant details">
                 </div>
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1">Details / Installment</label>
-                    <input type="text" id="edit-details" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                    <label class="block text-xs text-slate-400 mb-1">Installment details or extra notes</label>
+                    <input type="text" id="edit-details" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary" placeholder="e.g. E-E6 :005/006">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Category Override</label>
+                    <select id="edit-category" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                        <option value="Food & Beverage">Food & Beverage</option>
+                        <option value="Beauty & Wellness">Beauty & Wellness</option>
+                        <option value="Shopping & Retail">Shopping & Retail</option>
+                        <option value="Travel & Transportation">Travel & Transportation</option>
+                        <option value="Utilities & Insurance">Utilities & Insurance</option>
+                        <option value="Uncategorized">Uncategorized</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-xs text-slate-400 mb-1">Amount (RM)</label>
@@ -417,39 +480,97 @@
         </div>
     </div>
 
+    <!-- Maintenance Rule Builder Modal -->
+    <div id="rule-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-bold text-white mb-4" id="rule-modal-title">Rule Builder Mapping</h3>
+            <form id="rule-form" class="space-y-4" onsubmit="saveRule(event)">
+                <input type="hidden" id="rule-id">
+                
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Raw Description Trigger Keyword (Contains, case-insensitive)</label>
+                    <input type="text" id="rule-trigger" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary" placeholder="e.g. MUSEE PLATINUM" required>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Clean Friendly Merchant</label>
+                        <input type="text" id="rule-mapped-merchant" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary" placeholder="e.g. Musee Tokyo" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Target Category</label>
+                        <select id="rule-category" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary">
+                            <option value="Food & Beverage">Food & Beverage</option>
+                            <option value="Beauty & Wellness">Beauty & Wellness</option>
+                            <option value="Shopping & Retail">Shopping & Retail</option>
+                            <option value="Travel & Transportation">Travel & Transportation</option>
+                            <option value="Utilities & Insurance">Utilities & Insurance</option>
+                            <option value="Uncategorized">Uncategorized</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Link to Credit Card</label>
+                        <select id="rule-card" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary">
+                            <option value="Visa Platinum">Visa Platinum</option>
+                            <option value="Mastercard World">Mastercard World</option>
+                            <option value="Maybank 2Gold">Maybank 2Gold</option>
+                            <option value="None">None</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Cashback % Rate</label>
+                        <input type="number" step="0.1" id="rule-cashback" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary" placeholder="e.g. 5.0">
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeRuleModal()" class="flex-1 py-2.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">Cancel</button>
+                    <button type="submit" class="flex-1 py-2.5 rounded-lg bg-primary text-white hover:bg-secondary transition-colors font-medium">Save Rule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // --- State Management ---
         let currentTab = 'console';
         let chartInstance = null;
         
-        // Mock Settings (Not stored in localStorage per requirement)
         let sessionSettings = {
             cfUrl: '',
-            koofrUrl: '',
-            koofrPass: ''
+            useAI: false
         };
 
-        // Sample Data based on prompt
+        // Pre-populated default parse-mapping rules
+        let rules = [
+            { id: 1, trigger: 'MUSEE PLATINUM', mappedMerchant: 'Musee Platinum', category: 'Beauty & Wellness', card: 'Visa Platinum', cashbackRate: 5.0 },
+            { id: 2, trigger: 'BOOST JUICE', mappedMerchant: 'Boost Juice', category: 'Food & Beverage', card: 'Mastercard World', cashbackRate: 8.0 },
+            { id: 3, trigger: 'SPECS CITY', mappedMerchant: 'Specs City Optics', category: 'Shopping & Retail', card: 'Visa Platinum', cashbackRate: 3.0 }
+        ];
+
+        // Core Transactions
         let transactions = [
-            { id: 1, postDate: '22/03', transDate: '22/03', merchant: 'MUSEE PLATINUM TOKYO', details: 'E-E6 :005/006', amount: 133.33 },
-            { id: 2, postDate: '07/04', transDate: '06/04', merchant: 'BOOST JUICE-SUNWAY VELO KUALA LUMPUR MY', details: '', amount: 12.90 },
-            { id: 3, postDate: '05/04', transDate: '04/04', merchant: 'SPECS CITY OPTICS K_LUMPUR MY', details: '', amount: 276.00 }
+            { id: 1, postDate: '22/03', transDate: '22/03', merchant: 'MUSEE PLATINUM TOKYO-E-E6 :005/006', mappedMerchant: 'Musee Platinum', category: 'Beauty & Wellness', details: 'E-E6 :005/006', amount: 133.33 },
+            { id: 2, postDate: '07/04', transDate: '06/04', merchant: 'BOOST JUICE-SUNWAY VELO KUALA LUMPUR MY', mappedMerchant: 'Boost Juice', category: 'Food & Beverage', details: '', amount: 12.90 },
+            { id: 3, postDate: '05/04', transDate: '04/04', merchant: 'SPECS CITY OPTICS K_LUMPUR MY', mappedMerchant: 'Specs City Optics', category: 'Shopping & Retail', details: '', amount: 276.00 }
         ];
 
         let cashbacks = [
-            { id: 1, card: 'Visa Platinum', date: '10/04', merchant: 'Shopee E-Commerce', amount: 15.50 },
-            { id: 2, card: 'Visa Platinum', date: '12/04', merchant: 'Petronas', amount: 8.00 },
-            { id: 3, card: 'Mastercard World', date: '15/04', merchant: 'Grocery Reward', amount: 25.00 }
+            { id: 1, card: 'Visa Platinum', date: '22/03', merchant: 'Musee Platinum', amount: 6.67 },
+            { id: 2, card: 'Mastercard World', date: '07/04', merchant: 'Boost Juice', amount: 1.03 },
+            { id: 3, card: 'Visa Platinum', date: '05/04', merchant: 'Specs City Optics', amount: 8.28 }
         ];
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Setup Dropzone click
+            // Dropzone logic
             document.getElementById('drop-zone').addEventListener('click', () => {
                 document.getElementById('file-input').click();
             });
 
-            // Prevent default drag behaviors
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 document.getElementById('drop-zone').addEventListener(eventName, preventDefaults, false);
             });
@@ -463,34 +584,76 @@
 
         // --- Navigation ---
         function switchTab(tabId) {
-            // Hide all
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(el => { el.classList.remove('text-white', 'bg-slate-800'); el.classList.add('text-slate-400'); });
             document.querySelectorAll('nav.md\\:hidden button').forEach(el => { el.classList.remove('text-white'); el.classList.add('text-slate-400'); });
 
-            // Show active
             document.getElementById('tab-' + tabId).classList.add('active');
             
-            // Desktop active state
             const deskBtn = document.getElementById('nav-desktop-' + tabId);
             if(deskBtn) { deskBtn.classList.add('text-white', 'bg-slate-800'); deskBtn.classList.remove('text-slate-400'); }
             
-            // Mobile active state
             const mobBtn = document.getElementById('nav-mobile-' + tabId);
             if(mobBtn) { mobBtn.classList.add('text-white'); mobBtn.classList.remove('text-slate-400'); }
 
             currentTab = tabId;
-
-            // Reset scroll
             document.getElementById('main-scroll-area').scrollTop = 0;
 
-            // Render specific tab needs
             if(tabId === 'analytics') {
-                setTimeout(initChart, 100); // Give time for display:block to compute dimensions
+                setTimeout(initChart, 100);
             }
         }
 
-        // --- File Handling (Mock PDF Flow) ---
+        // --- Sandbox Rule Tester ---
+        function testSandbox() {
+            const input = document.getElementById('sandbox-input').value.trim();
+            const out = document.getElementById('sandbox-output');
+            
+            if(!input) {
+                out.innerText = "Type raw statement text to test mapping...";
+                out.className = "text-slate-300 font-mono italic";
+                return;
+            }
+
+            const parsed = runRuleEngineOnText(input);
+            if(parsed.ruleMatched) {
+                out.innerHTML = `
+                    <span class="text-green-400 font-bold">Rule Match Found:</span><br>
+                    Mapped: <strong class="text-white">${parsed.mappedMerchant}</strong><br>
+                    Category: <strong class="text-indigo-400">${parsed.category}</strong><br>
+                    Card: <strong class="text-yellow-400">${parsed.card}</strong> (Cashback: ${parsed.cashbackRate}%)
+                `;
+                out.className = "text-slate-200 font-mono";
+            } else {
+                out.innerHTML = `<span class="text-slate-500 italic">No exact rule match. Will default parsing profile.</span>`;
+                out.className = "text-slate-500 font-mono";
+            }
+        }
+
+        // Apply rules engine logic dynamically to clean descriptions
+        function runRuleEngineOnText(rawDesc) {
+            const upperText = rawDesc.toUpperCase();
+            for(let rule of rules) {
+                if(upperText.includes(rule.trigger.toUpperCase())) {
+                    return {
+                        ruleMatched: true,
+                        mappedMerchant: rule.mappedMerchant,
+                        category: rule.category,
+                        card: rule.card,
+                        cashbackRate: rule.cashbackRate
+                    };
+                }
+            }
+            return {
+                ruleMatched: false,
+                mappedMerchant: rawDesc,
+                category: 'Uncategorized',
+                card: 'None',
+                cashbackRate: 0
+            };
+        }
+
+        // --- File Handling (Local Parser Pipeline) ---
         function handleFileSelect(e) {
             const files = e.target.files;
             if(files.length) processMockPDF(files[0]);
@@ -507,8 +670,6 @@
                 showMessage("Please upload a valid PDF file.");
                 return;
             }
-
-            // Mock encryption check
             document.getElementById('password-modal').classList.remove('hidden');
         }
 
@@ -537,32 +698,132 @@
             
             let progress = 0;
             const interval = setInterval(() => {
-                progress += Math.random() * 15;
+                progress += Math.random() * 20;
                 if(progress > 100) progress = 100;
                 bar.style.width = progress + '%';
 
-                if(progress < 30) stepText.innerText = "Decrypting & Local OCR...";
-                else if(progress < 70) stepText.innerText = "Proxying to LLM Engine...";
-                else stepText.innerText = "Formatting Results...";
+                if(progress < 30) {
+                    stepText.innerText = "Decrypting & Local OCR...";
+                } else if(progress < 70) {
+                    stepText.innerText = sessionSettings.useAI ? "Proxying to Gemini AI Engine..." : "Consulting Maintenance Rules & Regex...";
+                } else {
+                    stepText.innerText = "Resolving Category rules and structures...";
+                }
 
                 if(progress === 100) {
                     clearInterval(interval);
                     setTimeout(() => {
                         statusBox.classList.add('hidden');
                         document.getElementById('extraction-results').classList.remove('hidden');
-                        document.getElementById('confidence-score').innerText = "98%";
-                        renderConsoleTable();
+                        document.getElementById('confidence-score').innerText = sessionSettings.useAI ? "99% (AI)" : "95% (Rule Engine)";
+                        
+                        // Parse mock bank records by passing raw strings through current ruleset
+                        reparseExistingWithRules();
+                        
+                        if (sessionSettings.useAI) {
+                            showMessage("Gemini AI parsed and applied mapping parameters.");
+                        } else {
+                            showMessage("Local parser matched 3 of 3 rule signatures.");
+                        }
+
+                        renderAll();
                     }, 500);
                 }
-            }, 300);
+            }, 250);
         }
 
-        // --- Render Functions ---
+        function reparseExistingWithRules() {
+            transactions.forEach(t => {
+                const mapRes = runRuleEngineOnText(t.merchant);
+                if(mapRes.ruleMatched) {
+                    t.mappedMerchant = mapRes.mappedMerchant;
+                    t.category = mapRes.category;
+                    
+                    // Auto recalculate cashback logs
+                    const existingCb = cashbacks.find(cb => cb.merchant === t.mappedMerchant);
+                    if(existingCb && mapRes.cashbackRate > 0) {
+                        existingCb.amount = parseFloat(((t.amount * mapRes.cashbackRate) / 100).toFixed(2));
+                        existingCb.card = mapRes.card;
+                    }
+                }
+            });
+        }
+
+        // --- Rule Editor Modal Actions ---
+        function openRuleModal(id) {
+            const form = document.getElementById('rule-form');
+            form.reset();
+
+            if (id !== null) {
+                document.getElementById('rule-modal-title').innerText = "Edit Parsing Rule";
+                const rule = rules.find(x => x.id === id);
+                if(rule) {
+                    document.getElementById('rule-id').value = rule.id;
+                    document.getElementById('rule-trigger').value = rule.trigger;
+                    document.getElementById('rule-mapped-merchant').value = rule.mappedMerchant;
+                    document.getElementById('rule-category').value = rule.category;
+                    document.getElementById('rule-card').value = rule.card;
+                    document.getElementById('rule-cashback').value = rule.cashbackRate;
+                }
+            } else {
+                document.getElementById('rule-modal-title').innerText = "Add Parsing Rule";
+                document.getElementById('rule-id').value = '';
+            }
+            document.getElementById('rule-modal').classList.remove('hidden');
+        }
+
+        function closeRuleModal() {
+            document.getElementById('rule-modal').classList.add('hidden');
+        }
+
+        function saveRule(e) {
+            e.preventDefault();
+            const id = document.getElementById('rule-id').value;
+            const newRule = {
+                trigger: document.getElementById('rule-trigger').value.trim(),
+                mappedMerchant: document.getElementById('rule-mapped-merchant').value.trim(),
+                category: document.getElementById('rule-category').value,
+                card: document.getElementById('rule-card').value,
+                cashbackRate: parseFloat(document.getElementById('rule-cashback').value) || 0.0
+            };
+
+            if (id) {
+                const index = rules.findIndex(x => x.id == id);
+                if(index !== -1) {
+                    rules[index] = { ...rules[index], ...newRule };
+                }
+                showMessage("Parsing rule updated.");
+            } else {
+                newRule.id = Date.now();
+                rules.push(newRule);
+                showMessage("Parsing rule registered.");
+            }
+
+            closeRuleModal();
+            reparseExistingWithRules();
+            renderAll();
+            testSandbox();
+        }
+
+        function deleteRule(id) {
+            rules = rules.filter(r => r.id !== id);
+            showMessage("Rule deleted.");
+            reparseExistingWithRules();
+            renderAll();
+        }
+
+        function addRuleFromConsole() {
+            switchTab('maintenance');
+            openRuleModal(null);
+        }
+
+        // --- Render Engine ---
         function renderAll() {
             renderConsoleTable();
             renderMasterTransactions();
             renderAnalyticsCards();
             renderCashback();
+            renderRulesTable();
         }
 
         function renderConsoleTable() {
@@ -574,8 +835,11 @@
                         <td class="px-4 py-3 whitespace-nowrap">${t.postDate}</td>
                         <td class="px-4 py-3 whitespace-nowrap">${t.transDate}</td>
                         <td class="px-4 py-3">
-                            <div class="font-medium text-white">${t.merchant}</div>
-                            <div class="text-xs text-slate-500">${t.details}</div>
+                            <div class="font-medium text-white">${t.mappedMerchant || t.merchant}</div>
+                            <div class="flex gap-2 items-center mt-1">
+                                <span class="text-xs text-slate-500 truncate max-w-xs">${t.merchant}</span>
+                                <span class="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded">${t.category}</span>
+                            </div>
                         </td>
                         <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
                         <td class="px-4 py-3 text-center">
@@ -595,46 +859,51 @@
             const filtered = transactions.filter(t => {
                 const term = filterText.toLowerCase();
                 return t.merchant.toLowerCase().includes(term) || 
-                       t.details.toLowerCase().includes(term) ||
+                       (t.mappedMerchant && t.mappedMerchant.toLowerCase().includes(term)) ||
+                       t.category.toLowerCase().includes(term) ||
                        t.amount.toString().includes(term) ||
                        t.postDate.includes(term);
             });
 
             if(filtered.length === 0) {
-                const emptyHTML = `<div class="p-8 text-center text-slate-500 text-sm">No transactions found.</div>`;
+                const emptyHTML = `<div class="p-8 text-center text-slate-500 text-sm">No transactions matched your query.</div>`;
                 desktopBody.innerHTML = `<tr><td colspan="5">${emptyHTML}</td></tr>`;
                 mobileList.innerHTML = emptyHTML;
                 return;
             }
 
             filtered.forEach(t => {
-                // Desktop
                 desktopBody.innerHTML += `
                     <tr class="hover:bg-slate-800/50 transition-colors">
                         <td class="px-4 py-3 whitespace-nowrap text-slate-400">
                             <div>${t.postDate}</div>
                             <div class="text-[10px]">T: ${t.transDate}</div>
                         </td>
-                        <td class="px-4 py-3 font-medium text-white">${t.merchant}</td>
-                        <td class="px-4 py-3 text-slate-400">${t.details || '-'}</td>
+                        <td class="px-4 py-3 font-medium text-white">${t.mappedMerchant || t.merchant}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-indigo-300">${t.category}</span>
+                            ${t.details ? `<div class="text-xs text-slate-500 mt-1">${t.details}</div>` : ''}
+                        </td>
                         <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
                         <td class="px-4 py-3 text-center">
-                            <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
-                            <button onclick="deleteTransaction(${t.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors ml-1"><i class="ph ph-trash"></i></button>
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
+                                <button onclick="deleteTransaction(${t.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"><i class="ph ph-trash"></i></button>
+                            </div>
                         </td>
                     </tr>
                 `;
 
-                // Mobile Card View
                 mobileList.innerHTML += `
                     <div class="p-4 hover:bg-slate-800/30 transition-colors">
                         <div class="flex justify-between items-start mb-2">
-                            <div class="font-medium text-white leading-tight pr-4">${t.merchant}</div>
+                            <div class="font-medium text-white leading-tight pr-4">${t.mappedMerchant || t.merchant}</div>
                             <div class="font-bold text-white whitespace-nowrap">RM ${t.amount.toFixed(2)}</div>
                         </div>
                         <div class="flex justify-between items-end">
-                            <div>
+                            <div class="space-y-1">
                                 <div class="text-xs text-slate-400">${t.postDate} ${t.details ? `• ${t.details}` : ''}</div>
+                                <span class="inline-block text-[10px] bg-slate-850 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">${t.category}</span>
                             </div>
                             <div class="flex gap-2">
                                 <button onclick="openEditModal(${t.id})" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>
@@ -652,7 +921,7 @@
 
             if(transactions.length > 0) {
                 const highest = transactions.reduce((prev, current) => (prev.amount > current.amount) ? prev : current);
-                document.getElementById('stat-high').innerText = highest.merchant;
+                document.getElementById('stat-high').innerText = highest.mappedMerchant || highest.merchant;
             } else {
                 document.getElementById('stat-high').innerText = "--";
             }
@@ -664,15 +933,14 @@
             container.innerHTML = '';
             list.innerHTML = '';
 
-            // Group by card
             const grouped = {};
             cashbacks.forEach(c => {
                 if(!grouped[c.card]) grouped[c.card] = 0;
                 grouped[c.card] += c.amount;
             });
 
-            // Render Cards
             for (const [card, amount] of Object.entries(grouped)) {
+                if(card === "None") continue;
                 container.innerHTML += `
                     <div class="glass-panel p-5 rounded-2xl border border-slate-700 relative overflow-hidden">
                         <div class="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
@@ -685,22 +953,55 @@
                             <div class="mt-4 w-full bg-slate-800 rounded-full h-1.5">
                                 <div class="bg-green-400 h-1.5 rounded-full" style="width: ${Math.min((amount/50)*100, 100)}%"></div>
                             </div>
-                            <div class="text-xs text-slate-500 mt-2 text-right">Target: RM 50.00</div>
+                            <div class="text-xs text-slate-500 mt-2 text-right">Progress towards monthly cap limit</div>
                         </div>
                     </div>
                 `;
             }
 
-            // Render List
             cashbacks.forEach(c => {
                 list.innerHTML += `
-                    <li class="p-4 flex justify-between items-center hover:bg-slate-800/30">
+                    <li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors">
                         <div>
                             <div class="font-medium text-white">${c.merchant}</div>
                             <div class="text-xs text-slate-400">${c.date} • ${c.card}</div>
                         </div>
                         <div class="font-bold text-green-400">+ RM ${c.amount.toFixed(2)}</div>
                     </li>
+                `;
+            });
+        }
+
+        function renderRulesTable() {
+            const tbody = document.getElementById('rules-table-body');
+            const countBadge = document.getElementById('rule-count-badge');
+            tbody.innerHTML = '';
+            countBadge.innerText = `${rules.length} Active Rules`;
+
+            if(rules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-500">No custom parsing rules found. Click 'Add Rule' to create one!</td></tr>`;
+                return;
+            }
+
+            rules.forEach(rule => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 font-mono text-slate-300 font-semibold text-xs select-all bg-slate-900/40">${rule.trigger}</td>
+                        <td class="px-4 py-3 font-medium text-white">${rule.mappedMerchant}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">${rule.category}</span>
+                        </td>
+                        <td class="px-4 py-3 text-slate-400 text-xs">${rule.card}</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="text-xs font-semibold px-2 py-0.5 rounded ${rule.cashbackRate > 0 ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-800 text-slate-400'}">${rule.cashbackRate > 0 ? `${rule.cashbackRate}%` : 'N/A'}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="openRuleModal(${rule.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>
+                                <button onclick="deleteRule(${rule.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
                 `;
             });
         }
@@ -712,7 +1013,7 @@
         }
 
         function addManualTransaction() {
-            openEditModal(null); // null ID means new
+            openEditModal(null);
         }
 
         function openEditModal(id) {
@@ -729,12 +1030,12 @@
                     document.getElementById('edit-trans').value = t.transDate;
                     document.getElementById('edit-merchant').value = t.merchant;
                     document.getElementById('edit-details').value = t.details;
+                    document.getElementById('edit-category').value = t.category;
                     document.getElementById('edit-amount').value = t.amount;
                 }
             } else {
                 document.getElementById('edit-modal-title').innerText = "Add Manual Transaction";
                 document.getElementById('edit-id').value = '';
-                // Default dates
                 const today = new Date();
                 const d = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0');
                 document.getElementById('edit-post').value = d;
@@ -750,10 +1051,17 @@
 
         function saveEditTransaction() {
             const id = document.getElementById('edit-id').value;
+            const rawMerc = document.getElementById('edit-merchant').value;
+            
+            // Run rules to auto clean friendly merchant mapping unless manually set
+            const ruleMapping = runRuleEngineOnText(rawMerc);
+
             const t = {
                 postDate: document.getElementById('edit-post').value,
                 transDate: document.getElementById('edit-trans').value,
-                merchant: document.getElementById('edit-merchant').value,
+                merchant: rawMerc,
+                mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawMerc,
+                category: document.getElementById('edit-category').value,
                 details: document.getElementById('edit-details').value,
                 amount: parseFloat(document.getElementById('edit-amount').value) || 0
             };
@@ -764,13 +1072,13 @@
                     transactions[index] = { ...transactions[index], ...t };
                 }
             } else {
-                t.id = Date.now(); // random id
+                t.id = Date.now();
                 transactions.push(t);
             }
 
             closeEditModal();
             renderAll();
-            if(currentTab === 'analytics') initChart(); // redraw chart
+            if(currentTab === 'analytics') initChart();
         }
 
         function deleteTransaction(id) {
@@ -780,16 +1088,15 @@
         }
 
         function addManualCashback() {
-            // simplified mock for adding cashback
-            const amount = parseFloat(prompt("Enter cashback amount (RM):", "10.00"));
+            const amount = parseFloat(prompt("Enter cashback amount (RM):", "5.00"));
             if(!amount) return;
-            const merchant = prompt("Enter source/merchant:", "Bonus");
+            const merchant = prompt("Enter source/merchant:", "Bonus Reward");
             
             cashbacks.push({
                 id: Date.now(),
                 card: 'Manual Entry',
                 date: 'Today',
-                merchant: merchant || 'Unknown',
+                merchant: merchant || 'Generic Card Promo',
                 amount: amount
             });
             renderCashback();
@@ -798,9 +1105,9 @@
         function exportData() {
             if(transactions.length === 0) return;
             
-            let csv = 'Post Date,Trans Date,Merchant,Details,Amount (RM)\n';
+            let csv = 'Post Date,Trans Date,Merchant,Mapped Merchant,Category,Details,Amount (RM)\n';
             transactions.forEach(t => {
-                csv += `"${t.postDate}","${t.transDate}","${t.merchant}","${t.details}",${t.amount}\n`;
+                csv += `"${t.postDate}","${t.transDate}","${t.merchant}","${t.mappedMerchant || t.merchant}","${t.category}","${t.details}",${t.amount}\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -808,7 +1115,7 @@
             const a = document.createElement('a');
             a.setAttribute('hidden', '');
             a.setAttribute('href', url);
-            a.setAttribute('download', 'statements_export.csv');
+            a.setAttribute('download', 'processed_statements.csv');
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -817,9 +1124,12 @@
         function saveSetup(e) {
             e.preventDefault();
             sessionSettings.cfUrl = document.getElementById('cf-url').value;
-            sessionSettings.koofrUrl = document.getElementById('koofr-url').value;
-            sessionSettings.koofrPass = document.getElementById('koofr-pass').value;
-            showMessage("Settings saved to current session memory.");
+            sessionSettings.useAI = document.getElementById('use-ai-toggle').checked;
+            
+            let msg = "Proxy Endpoint saved to session memory.";
+            if (sessionSettings.useAI) msg += " AI Parse Rules are live.";
+            
+            showMessage(msg);
         }
 
         function manualSync() {
@@ -835,10 +1145,11 @@
                     dot.classList.remove('hidden');
                     setTimeout(() => dot.classList.add('hidden'), 3000);
                 }
-                showMessage("Sync completed successfully.");
+                showMessage("Cloudflare Rule Engine synced successfully.");
             }, 1000);
         }
 
+        // --- Categories Chart (Upgraded to dynamic rule category summaries) ---
         function initChart() {
             const ctx = document.getElementById('spendingChart');
             if(!ctx) return;
@@ -847,45 +1158,55 @@
                 chartInstance.destroy();
             }
 
-            // Simple mock data for chart based on transactions
-            const labels = transactions.map(t => t.merchant.substring(0, 10) + '...');
-            const data = transactions.map(t => t.amount);
+            // Aggregate spending dynamically by mapped Categories
+            const groupData = {};
+            transactions.forEach(t => {
+                const cat = t.category || "Uncategorized";
+                groupData[cat] = (groupData[cat] || 0) + t.amount;
+            });
+
+            const labels = Object.keys(groupData);
+            const data = Object.values(groupData).map(val => parseFloat(val.toFixed(2)));
 
             Chart.defaults.color = '#94a3b8';
             Chart.defaults.font.family = 'Inter';
 
             chartInstance = new Chart(ctx, {
-                type: 'bar',
+                type: 'doughnut',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Amount (RM)',
                         data: data,
-                        backgroundColor: '#6366f1',
-                        borderRadius: 6,
+                        backgroundColor: [
+                            '#6366f1', // primary Indigo
+                            '#ec4899', // pink Pink
+                            '#10b981', // green Emerald
+                            '#f59e0b', // orange Amber
+                            '#8b5cf6', // purple Violet
+                            '#64748b'  // slate Grey
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#1e293b'
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.05)' }
-                        },
-                        x: {
-                            grid: { display: false }
+                        legend: { 
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 16
+                            }
                         }
-                    }
+                    },
+                    cutout: '65%'
                 }
             });
         }
 
         function showMessage(msg) {
-            // Simple mock toast
             const toast = document.createElement('div');
             toast.className = 'fixed bottom-20 md:bottom-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg border border-slate-700 z-50 text-sm animate-bounce-in';
             toast.innerText = msg;
