@@ -701,26 +701,31 @@
         }
 
         // Simplified Rule Engine: Only handles Category & Naming overrides
-        function runRuleEngineOnText(rawDesc, explicitCategory = '') {
-            const upperText = rawDesc.toUpperCase();
-            const upperCat = explicitCategory.toUpperCase();
-            
-            for(let rule of rules) {
-                const trigger = rule.trigger.toUpperCase();
-                if(upperText.includes(trigger) || (upperCat && upperCat === trigger)) {
-                    return {
-                        ruleMatched: true,
-                        mappedMerchant: rule.mappedMerchant,
-                        category: rule.category
-                    };
-                }
-            }
-            return {
-                ruleMatched: false,
-                mappedMerchant: rawDesc,
-                category: explicitCategory || 'Uncategorized'
-            };
-        }
+       
+function runRuleEngineOnText(rawDesc, explicitCategory = '') {
+  const upperText = (rawDesc || '').toUpperCase();
+  const upperCat = (explicitCategory || '').toUpperCase();
+
+  for (let rule of rules) {
+    const trigger = (rule.trigger || '').toUpperCase();
+
+    // ✅ FIX: proper boolean operator
+    if (upperText.includes(trigger) || (upperCat && upperCat === trigger)) {
+      return {
+        ruleMatched: true,
+        mappedMerchant: rule.mappedMerchant,
+        category: rule.category
+      };
+    }
+  }
+
+  return {
+    ruleMatched: false,
+    mappedMerchant: rawDesc,
+    // ✅ FIX: proper fallback operator
+    category: explicitCategory || 'Uncategorized'
+  };
+}
 
         // --- Secure PDF Text Extraction Pipeline ---
         function handleFileSelect(e) {
