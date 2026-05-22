@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zero-Cost Statement Parser</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        secondary: '#4f46e5',
+                        dark: '#0f172a',
+                        surface: '#1e293b',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Mobile safe area padding */
+        .pb-safe {
+            padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-sm md:text-base">
+
+    
+    <!-- Desktop Sidebar (Hidden on Mobile) -->
+    <aside class="hidden md:flex flex-col w-64 glass-panel border-r border-slate-700 h-full z-20">
+        <div class="p-6 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
+                <i class="ph ph-receipt text-xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg leading-tight text-white">Zero-Cost</h1>
+                <p class="text-xs text-slate-400">Statement Parser</p>
+            </div>
+        </div>
+        <nav class="flex-1 px-4 space-y-2 mt-4">
+            <button onclick="switchTab('console')" id="nav-desktop-console" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all active-nav">
+                <i class="ph ph-terminal-window text-xl"></i> Console
+            </button>
+            <button onclick="switchTab('analytics')" id="nav-desktop-analytics" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
+                <i class="ph ph-chart-pie-slice text-xl"></i> Analytics
+            </button>
+            <button onclick="switchTab('cashback')" id="nav-desktop-cashback" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
+                <i class="ph ph-coins text-xl"></i> Cashback
+            </button>
+            <button onclick="switchTab('maintenance')" id="nav-desktop-maintenance" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
+                <i class="ph ph-wrench text-xl"></i> Maintenance
+            </button>
+            <button onclick="switchTab('setup')" id="nav-desktop-setup" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
+                <i class="ph ph-gear text-xl"></i> Setup
+            </button>
+        </nav>
+        <div class="p-4 border-t border-slate-700">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span>Koofr Sync</span>
+                <span id="sync-status-desk" class="text-green-400">Synced</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full relative overflow-hidden bg-dark">
+        <!-- Mobile Header -->
+        <header class="md:hidden glass-panel border-b border-slate-700 p-4 flex items-center justify-between z-10">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
+                    <i class="ph ph-receipt text-white"></i>
+                </div>
+                <h1 class="font-bold text-white text-base">Statement Parser</h1>
+            </div>
+            <button onclick="manualSync()" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 relative">
+                <i class="ph ph-arrows-clockwise"></i>
+                <span id="sync-dot" class="absolute top-0 right-0 w-2 h-2 bg-green-500 rounded-full hidden"></span>
+            </button>
+        </header>
+
+        <!-- Scrollable Tab Container -->
+        <div id="main-scroll-area" class="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 pb-24 md:pb-8">
+            
+            <section id="tab-console" class="tab-content active max-w-5xl mx-auto space-y-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Parser Console</h2>
+                        <p class="text-slate-400 text-sm">Upload, decrypt, and parse statements locally.</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
+                        <span class="text-xs text-slate-400">Confidence:</span>
+                        <span id="confidence-score" class="font-bold text-green-400">--%</span>
+                    </div>
+                </div>
+
+                <!-- Upload Zone -->
+                <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary hover:bg-slate-800/50 transition-all group">
+                    <div class="w-16 h-16 rounded-full bg-slate-800 group-hover:bg-primary/20 flex items-center justify-center mb-4 transition-all">
+                        <i class="ph ph-upload-simple text-3xl text-slate-400 group-hover:text-primary"></i>
+                    </div>
+                    <h3 class="font-semibold text-lg text-white mb-1">Upload PDF Statement</h3>
+                    <p class="text-slate-400 text-sm max-w-md">Drag and drop or click to select. Processing stays in your browser.</p>
+                    <input type="file" id="file-input" class="hidden" accept=".pdf" onchange="handleFileSelect(event)">
+                </div>
+
+                <!-- Processing Status -->
+                <div id="processing-status" class="hidden glass-panel rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-semibold text-white flex items-center gap-2">
+                            <i class="ph ph-spinner-gap animate-spin text-primary"></i> Processing Statement...
+                        </h4>
+                        <span id="process-step" class="text-xs text-slate-400">Extracting Text (Local)</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-2">
+                        <div id="process-bar" class="bg-primary h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Extracted Data Table -->
+                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden hidden" id="extraction-results">
+                    <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                        <h3 class="font-semibold text-white">Extracted Transactions</h3>
+                        <button class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addManualTransaction()">+ Manual Entry</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-300 min-w-[600px]">
+                            <thead class="bg-slate-800 text-slate-400">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">Post Date</th>
+                                    <th class="px-4 py-3 font-medium">Trans Date</th>
+                                    <th class="px-4 py-3 font-medium">Merchant Details</th>
+                                    <th class="px-4 py-3 font-medium text-right">Amount (RM)</th>
+                                    <th class="px-4 py-3 font-medium text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="extracted-table-body" class="divide-y divide-slate-700/50">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-analytics" class="tab-content max-w-5xl mx-auto space-y-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white">Analytics</h2>
+                    <p class="text-slate-400 text-sm">Interactive overview and transaction management.</p>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="glass-panel p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-400 mb-1">Total Spent</p>
+                        <p class="text-xl md:text-2xl font-bold text-white">RM <span id="stat-total">0.00</span></p>
+                    </div>
+                    <div class="glass-panel p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-400 mb-1">Transactions</p>
+                        <p class="text-xl md:text-2xl font-bold text-white" id="stat-count">0</p>
+                    </div>
+                    <div class="glass-panel p-4 rounded-2xl border border-slate-700">
+                        <p class="text-xs text-slate-400 mb-1">Highest Spends</p>
+                        <p class="text-sm font-medium text-white truncate" id="stat-high">--</p>
+                    </div>
+                    <div class="glass-panel p-4 rounded-2xl border border-slate-700 flex flex-col justify-center">
+                        <button onclick="exportData()" class="flex items-center justify-center gap-2 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white transition-colors border border-slate-600">
+                            <i class="ph ph-export"></i> Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chart Area -->
+                <div class="glass-panel p-4 rounded-2xl border border-slate-700 h-64 md:h-80">
+                    <canvas id="spendingChart"></canvas>
+                </div>
+
+                <!-- Master Transaction List -->
+                <div class="glass-panel rounded-2xl border border-slate-700 flex flex-col">
+                    <div class="p-4 border-b border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-800/50">
+                        <h3 class="font-semibold text-white w-full md:w-auto">All Transactions</h3>
+                        <div class="relative w-full md:w-64">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="search-input" placeholder="Search all fields..." class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-primary transition-colors" oninput="filterTransactions()">
+                        </div>
+                    </div>
+                    
+                    <!-- Desktop Table View -->
+                    <div class="hidden md:block overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-300">
+                            <thead class="bg-slate-800 text-slate-400">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium w-24">Date</th>
+                                    <th class="px-4 py-3 font-medium">Merchant</th>
+                                    <th class="px-4 py-3 font-medium">Details/Installment</th>
+                                    <th class="px-4 py-3 font-medium text-right w-32">Amount (RM)</th>
+                                    <th class="px-4 py-3 font-medium text-center w-20">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="master-table-body" class="divide-y divide-slate-700/50">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Mobile Card View -->
+                    <div id="master-mobile-list" class="md:hidden flex flex-col divide-y divide-slate-700/50">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-cashback" class="tab-content max-w-5xl mx-auto space-y-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Cashback Hub</h2>
+                        <p class="text-slate-400 text-sm">Auto-detected & manual cashback tracking.</p>
+                    </div>
+                    <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600" onclick="addManualCashback()">+ Add</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="cashback-cards-container">
+                    <!-- Populated by JS grouping -->
+                </div>
+                
+                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/50">
+                        <h3 class="font-semibold text-white">Recent Cashback History</h3>
+                    </div>
+                    <div class="p-0">
+                        <ul id="cashback-history-list" class="divide-y divide-slate-700/50">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-maintenance" class="tab-content max-w-5xl mx-auto space-y-6">
+                 <div>
+                    <h2 class="text-2xl font-bold text-white">Maintenance Hub</h2>
+                    <p class="text-slate-400 text-sm">Manage parsing rules and merchant categorizations.</p>
+                </div>
+
+                <div class="glass-panel rounded-2xl border border-slate-700 p-6 flex flex-col items-center justify-center text-center text-slate-400 h-64">
+                    <i class="ph ph-wrench text-4xl mb-3 text-slate-500"></i>
+                    <h3 class="text-white font-medium mb-1">Rule Engine Coming Soon</h3>
+                    <p class="text-sm max-w-sm">Here you will be able to map raw strings like "MUSEE PLATINUM" to specific categories or override LLM parsing logic.</p>
+                </div>
+            </section>
+
+            <section id="tab-setup" class="tab-content max-w-3xl mx-auto space-y-6">
+                 <div>
+                    <h2 class="text-2xl font-bold text-white">System Setup</h2>
+                    <p class="text-slate-400 text-sm">Configure your proxy and storage integrations.</p>
+                </div>
+
+                <div class="bg-yellow-900/20 border border-yellow-700/50 rounded-xl p-4 flex gap-3 text-yellow-200 text-sm">
+                    <i class="ph ph-warning-circle text-xl flex-shrink-0"></i>
+                    <p><strong>Security Notice:</strong> As requested, inputs below are <em>not</em> stored in the browser's localStorage. You must re-enter them upon refreshing the page.</p>
+                </div>
+
+                <form id="setup-form" class="space-y-6 glass-panel p-6 rounded-2xl border border-slate-700" onsubmit="saveSetup(event)">
+                    
+                    <div class="space-y-4">
+                        <h3 class="text-lg font-semibold text-white border-b border-slate-700 pb-2">Cloudflare Worker Proxy</h3>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Worker URL Endpoint</label>
+                            <input type="url" id="cf-url" placeholder="https://parser.your-worker.workers.dev" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pt-4">
+                        <h3 class="text-lg font-semibold text-white border-b border-slate-700 pb-2">Koofr Storage (Sync)</h3>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">WebDAV / API Endpoint</label>
+                            <input type="url" id="koofr-url" placeholder="https://app.koofr.net/dav/Koofr/" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">App Password</label>
+                            <input type="password" id="koofr-pass" placeholder="••••••••••••" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4 pt-4">
+                        <button type="submit" class="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2.5 rounded-lg transition-colors">
+                            Apply Settings (Session)
+                        </button>
+                        <button type="button" onclick="manualSync()" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+                            <i class="ph ph-cloud-arrow-up"></i> Test Sync
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
+
+        <nav class="md:hidden glass-panel border-t border-slate-700 flex justify-around items-center h-16 pb-safe z-20">
+            <button onclick="switchTab('console')" id="nav-mobile-console" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors active-nav-mobile">
+                <i class="ph ph-terminal-window text-2xl mb-1"></i>
+                <span class="text-[10px]">Console</span>
+            </button>
+            <button onclick="switchTab('analytics')" id="nav-mobile-analytics" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors">
+                <i class="ph ph-chart-pie-slice text-2xl mb-1"></i>
+                <span class="text-[10px]">Stats</span>
+            </button>
+            <button onclick="switchTab('cashback')" id="nav-mobile-cashback" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors">
+                <i class="ph ph-coins text-2xl mb-1"></i>
+                <span class="text-[10px]">Cashback</span>
+            </button>
+            <button onclick="switchTab('maintenance')" id="nav-mobile-maintenance" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors">
+                <i class="ph ph-wrench text-2xl mb-1"></i>
+                <span class="text-[10px]">Maint</span>
+            </button>
+            <button onclick="switchTab('setup')" id="nav-mobile-setup" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors">
+                <i class="ph ph-gear text-2xl mb-1"></i>
+                <span class="text-[10px]">Setup</span>
+            </button>
+        </nav>
+    </main>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-sm animate-bounce-in">
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center mx-auto mb-3">
+                    <i class="ph ph-lock-key text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-white">Encrypted PDF Detected</h3>
+                <p class="text-sm text-slate-400">Please enter the password to unlock and parse locally.</p>
+            </div>
+            <input type="password" id="pdf-password" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-primary text-center tracking-widest" placeholder="Password">
+            <div class="flex gap-3">
+                <button onclick="cancelUnlock()" class="flex-1 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">Cancel</button>
+                <button onclick="submitPassword()" class="flex-1 py-2 rounded-lg bg-primary text-white hover:bg-secondary transition-colors font-medium">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Transaction Modal -->
+    <div id="edit-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-bold text-white mb-4" id="edit-modal-title">Edit Transaction</h3>
+            <form id="edit-form" class="space-y-4">
+                <input type="hidden" id="edit-id">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Post Date</label>
+                        <input type="text" id="edit-post" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Trans Date</label>
+                        <input type="text" id="edit-trans" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Merchant</label>
+                    <input type="text" id="edit-merchant" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Details / Installment</label>
+                    <input type="text" id="edit-details" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Amount (RM)</label>
+                    <input type="number" step="0.01" id="edit-amount" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeEditModal()" class="flex-1 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">Cancel</button>
+                    <button type="button" onclick="saveEditTransaction()" class="flex-1 py-2 rounded-lg bg-primary text-white hover:bg-secondary transition-colors font-medium">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let currentTab = 'console';
+        let chartInstance = null;
+        
+        // Mock Settings (Not stored in localStorage per requirement)
+        let sessionSettings = {
+            cfUrl: '',
+            koofrUrl: '',
+            koofrPass: ''
+        };
+
+        // Sample Data based on prompt
+        let transactions = [
+            { id: 1, postDate: '22/03', transDate: '22/03', merchant: 'MUSEE PLATINUM TOKYO', details: 'E-E6 :005/006', amount: 133.33 },
+            { id: 2, postDate: '07/04', transDate: '06/04', merchant: 'BOOST JUICE-SUNWAY VELO KUALA LUMPUR MY', details: '', amount: 12.90 },
+            { id: 3, postDate: '05/04', transDate: '04/04', merchant: 'SPECS CITY OPTICS K_LUMPUR MY', details: '', amount: 276.00 }
+        ];
+
+        let cashbacks = [
+            { id: 1, card: 'Visa Platinum', date: '10/04', merchant: 'Shopee E-Commerce', amount: 15.50 },
+            { id: 2, card: 'Visa Platinum', date: '12/04', merchant: 'Petronas', amount: 8.00 },
+            { id: 3, card: 'Mastercard World', date: '15/04', merchant: 'Grocery Reward', amount: 25.00 }
+        ];
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Setup Dropzone click
+            document.getElementById('drop-zone').addEventListener('click', () => {
+                document.getElementById('file-input').click();
+            });
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                document.getElementById('drop-zone').addEventListener(eventName, preventDefaults, false);
+            });
+
+            document.getElementById('drop-zone').addEventListener('drop', handleDrop, false);
+
+            renderAll();
+        });
+
+        function preventDefaults (e) { e.preventDefault(); e.stopPropagation(); }
+
+        // --- Navigation ---
+        function switchTab(tabId) {
+            // Hide all
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(el => { el.classList.remove('text-white', 'bg-slate-800'); el.classList.add('text-slate-400'); });
+            document.querySelectorAll('nav.md\\:hidden button').forEach(el => { el.classList.remove('text-white'); el.classList.add('text-slate-400'); });
+
+            // Show active
+            document.getElementById('tab-' + tabId).classList.add('active');
+            
+            // Desktop active state
+            const deskBtn = document.getElementById('nav-desktop-' + tabId);
+            if(deskBtn) { deskBtn.classList.add('text-white', 'bg-slate-800'); deskBtn.classList.remove('text-slate-400'); }
+            
+            // Mobile active state
+            const mobBtn = document.getElementById('nav-mobile-' + tabId);
+            if(mobBtn) { mobBtn.classList.add('text-white'); mobBtn.classList.remove('text-slate-400'); }
+
+            currentTab = tabId;
+
+            // Reset scroll
+            document.getElementById('main-scroll-area').scrollTop = 0;
+
+            // Render specific tab needs
+            if(tabId === 'analytics') {
+                setTimeout(initChart, 100); // Give time for display:block to compute dimensions
+            }
+        }
+
+        // --- File Handling (Mock PDF Flow) ---
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if(files.length) processMockPDF(files[0]);
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if(files.length) processMockPDF(files[0]);
+        }
+
+        function processMockPDF(file) {
+            if(file.type !== 'application/pdf') {
+                showMessage("Please upload a valid PDF file.");
+                return;
+            }
+
+            // Mock encryption check
+            document.getElementById('password-modal').classList.remove('hidden');
+        }
+
+        function cancelUnlock() {
+            document.getElementById('password-modal').classList.add('hidden');
+            document.getElementById('file-input').value = '';
+        }
+
+        function submitPassword() {
+            const pass = document.getElementById('pdf-password').value;
+            if(!pass) return;
+
+            document.getElementById('password-modal').classList.add('hidden');
+            document.getElementById('pdf-password').value = '';
+            
+            startMockExtraction();
+        }
+
+        function startMockExtraction() {
+            document.getElementById('drop-zone').classList.add('hidden');
+            const statusBox = document.getElementById('processing-status');
+            statusBox.classList.remove('hidden');
+            
+            const bar = document.getElementById('process-bar');
+            const stepText = document.getElementById('process-step');
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 15;
+                if(progress > 100) progress = 100;
+                bar.style.width = progress + '%';
+
+                if(progress < 30) stepText.innerText = "Decrypting & Local OCR...";
+                else if(progress < 70) stepText.innerText = "Proxying to LLM Engine...";
+                else stepText.innerText = "Formatting Results...";
+
+                if(progress === 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        statusBox.classList.add('hidden');
+                        document.getElementById('extraction-results').classList.remove('hidden');
+                        document.getElementById('confidence-score').innerText = "98%";
+                        renderConsoleTable();
+                    }, 500);
+                }
+            }, 300);
+        }
+
+        // --- Render Functions ---
+        function renderAll() {
+            renderConsoleTable();
+            renderMasterTransactions();
+            renderAnalyticsCards();
+            renderCashback();
+        }
+
+        function renderConsoleTable() {
+            const tbody = document.getElementById('extracted-table-body');
+            tbody.innerHTML = '';
+            transactions.forEach(t => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap">${t.postDate}</td>
+                        <td class="px-4 py-3 whitespace-nowrap">${t.transDate}</td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-white">${t.merchant}</div>
+                            <div class="text-xs text-slate-500">${t.details}</div>
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderMasterTransactions(filterText = '') {
+            const desktopBody = document.getElementById('master-table-body');
+            const mobileList = document.getElementById('master-mobile-list');
+            desktopBody.innerHTML = '';
+            mobileList.innerHTML = '';
+
+            const filtered = transactions.filter(t => {
+                const term = filterText.toLowerCase();
+                return t.merchant.toLowerCase().includes(term) || 
+                       t.details.toLowerCase().includes(term) ||
+                       t.amount.toString().includes(term) ||
+                       t.postDate.includes(term);
+            });
+
+            if(filtered.length === 0) {
+                const emptyHTML = `<div class="p-8 text-center text-slate-500 text-sm">No transactions found.</div>`;
+                desktopBody.innerHTML = `<tr><td colspan="5">${emptyHTML}</td></tr>`;
+                mobileList.innerHTML = emptyHTML;
+                return;
+            }
+
+            filtered.forEach(t => {
+                // Desktop
+                desktopBody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap text-slate-400">
+                            <div>${t.postDate}</div>
+                            <div class="text-[10px]">T: ${t.transDate}</div>
+                        </td>
+                        <td class="px-4 py-3 font-medium text-white">${t.merchant}</td>
+                        <td class="px-4 py-3 text-slate-400">${t.details || '-'}</td>
+                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
+                            <button onclick="deleteTransaction(${t.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors ml-1"><i class="ph ph-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+
+                // Mobile Card View
+                mobileList.innerHTML += `
+                    <div class="p-4 hover:bg-slate-800/30 transition-colors">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="font-medium text-white leading-tight pr-4">${t.merchant}</div>
+                            <div class="font-bold text-white whitespace-nowrap">RM ${t.amount.toFixed(2)}</div>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <div class="text-xs text-slate-400">${t.postDate} ${t.details ? `• ${t.details}` : ''}</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="openEditModal(${t.id})" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderAnalyticsCards() {
+            const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+            document.getElementById('stat-total').innerText = total.toFixed(2);
+            document.getElementById('stat-count').innerText = transactions.length;
+
+            if(transactions.length > 0) {
+                const highest = transactions.reduce((prev, current) => (prev.amount > current.amount) ? prev : current);
+                document.getElementById('stat-high').innerText = highest.merchant;
+            } else {
+                document.getElementById('stat-high').innerText = "--";
+            }
+        }
+
+        function renderCashback() {
+            const container = document.getElementById('cashback-cards-container');
+            const list = document.getElementById('cashback-history-list');
+            container.innerHTML = '';
+            list.innerHTML = '';
+
+            // Group by card
+            const grouped = {};
+            cashbacks.forEach(c => {
+                if(!grouped[c.card]) grouped[c.card] = 0;
+                grouped[c.card] += c.amount;
+            });
+
+            // Render Cards
+            for (const [card, amount] of Object.entries(grouped)) {
+                container.innerHTML += `
+                    <div class="glass-panel p-5 rounded-2xl border border-slate-700 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                        <div class="relative z-10">
+                            <div class="flex items-center gap-2 mb-2 text-slate-400">
+                                <i class="ph ph-credit-card text-xl"></i>
+                                <span class="text-sm font-medium">${card}</span>
+                            </div>
+                            <div class="text-3xl font-bold text-white">RM ${amount.toFixed(2)}</div>
+                            <div class="mt-4 w-full bg-slate-800 rounded-full h-1.5">
+                                <div class="bg-green-400 h-1.5 rounded-full" style="width: ${Math.min((amount/50)*100, 100)}%"></div>
+                            </div>
+                            <div class="text-xs text-slate-500 mt-2 text-right">Target: RM 50.00</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Render List
+            cashbacks.forEach(c => {
+                list.innerHTML += `
+                    <li class="p-4 flex justify-between items-center hover:bg-slate-800/30">
+                        <div>
+                            <div class="font-medium text-white">${c.merchant}</div>
+                            <div class="text-xs text-slate-400">${c.date} • ${c.card}</div>
+                        </div>
+                        <div class="font-bold text-green-400">+ RM ${c.amount.toFixed(2)}</div>
+                    </li>
+                `;
+            });
+        }
+
+        // --- Data Interaction & Logic ---
+        function filterTransactions() {
+            const term = document.getElementById('search-input').value;
+            renderMasterTransactions(term);
+        }
+
+        function addManualTransaction() {
+            openEditModal(null); // null ID means new
+        }
+
+        function openEditModal(id) {
+            const modal = document.getElementById('edit-modal');
+            const form = document.getElementById('edit-form');
+            form.reset();
+
+            if (id !== null) {
+                document.getElementById('edit-modal-title').innerText = "Edit Transaction";
+                const t = transactions.find(x => x.id === id);
+                if(t) {
+                    document.getElementById('edit-id').value = t.id;
+                    document.getElementById('edit-post').value = t.postDate;
+                    document.getElementById('edit-trans').value = t.transDate;
+                    document.getElementById('edit-merchant').value = t.merchant;
+                    document.getElementById('edit-details').value = t.details;
+                    document.getElementById('edit-amount').value = t.amount;
+                }
+            } else {
+                document.getElementById('edit-modal-title').innerText = "Add Manual Transaction";
+                document.getElementById('edit-id').value = '';
+                // Default dates
+                const today = new Date();
+                const d = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0');
+                document.getElementById('edit-post').value = d;
+                document.getElementById('edit-trans').value = d;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        function saveEditTransaction() {
+            const id = document.getElementById('edit-id').value;
+            const t = {
+                postDate: document.getElementById('edit-post').value,
+                transDate: document.getElementById('edit-trans').value,
+                merchant: document.getElementById('edit-merchant').value,
+                details: document.getElementById('edit-details').value,
+                amount: parseFloat(document.getElementById('edit-amount').value) || 0
+            };
+
+            if (id) {
+                const index = transactions.findIndex(x => x.id == id);
+                if(index !== -1) {
+                    transactions[index] = { ...transactions[index], ...t };
+                }
+            } else {
+                t.id = Date.now(); // random id
+                transactions.push(t);
+            }
+
+            closeEditModal();
+            renderAll();
+            if(currentTab === 'analytics') initChart(); // redraw chart
+        }
+
+        function deleteTransaction(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            renderAll();
+            if(currentTab === 'analytics') initChart();
+        }
+
+        function addManualCashback() {
+            // simplified mock for adding cashback
+            const amount = parseFloat(prompt("Enter cashback amount (RM):", "10.00"));
+            if(!amount) return;
+            const merchant = prompt("Enter source/merchant:", "Bonus");
+            
+            cashbacks.push({
+                id: Date.now(),
+                card: 'Manual Entry',
+                date: 'Today',
+                merchant: merchant || 'Unknown',
+                amount: amount
+            });
+            renderCashback();
+        }
+
+        function exportData() {
+            if(transactions.length === 0) return;
+            
+            let csv = 'Post Date,Trans Date,Merchant,Details,Amount (RM)\n';
+            transactions.forEach(t => {
+                csv += `"${t.postDate}","${t.transDate}","${t.merchant}","${t.details}",${t.amount}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'statements_export.csv');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        function saveSetup(e) {
+            e.preventDefault();
+            sessionSettings.cfUrl = document.getElementById('cf-url').value;
+            sessionSettings.koofrUrl = document.getElementById('koofr-url').value;
+            sessionSettings.koofrPass = document.getElementById('koofr-pass').value;
+            showMessage("Settings saved to current session memory.");
+        }
+
+        function manualSync() {
+            const btn = event.currentTarget;
+            const icon = btn.querySelector('i');
+            if(icon) icon.classList.add('animate-spin');
+            
+            setTimeout(() => {
+                if(icon) icon.classList.remove('animate-spin');
+                document.getElementById('sync-status-desk').innerText = "Just now";
+                const dot = document.getElementById('sync-dot');
+                if(dot) {
+                    dot.classList.remove('hidden');
+                    setTimeout(() => dot.classList.add('hidden'), 3000);
+                }
+                showMessage("Sync completed successfully.");
+            }, 1000);
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('spendingChart');
+            if(!ctx) return;
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            // Simple mock data for chart based on transactions
+            const labels = transactions.map(t => t.merchant.substring(0, 10) + '...');
+            const data = transactions.map(t => t.amount);
+
+            Chart.defaults.color = '#94a3b8';
+            Chart.defaults.font.family = 'Inter';
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Amount (RM)',
+                        data: data,
+                        backgroundColor: '#6366f1',
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showMessage(msg) {
+            // Simple mock toast
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-20 md:bottom-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg border border-slate-700 z-50 text-sm animate-bounce-in';
+            toast.innerText = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 3000);
+        }
+
+    </script>
+</body>
+</html>
