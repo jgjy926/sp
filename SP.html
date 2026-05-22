@@ -898,7 +898,14 @@
                         })
                     });
                     
-                    if (!response.ok) throw new Error("Worker responded with error status");
+                    if (!response.ok) {
+                        let errData;
+                        try { errData = await response.json(); } catch(e){}
+                        if (errData && errData.error) {
+                            throw new Error(`${errData.error} ${errData.troubleshooting || ''}`);
+                        }
+                        throw new Error("Worker responded with error status");
+                    }
                     const result = await response.json();
                     
                     if (result.transactions && Array.isArray(result.transactions)) {
@@ -913,7 +920,7 @@
                     showMessage("Worker sync parse completed.");
 
                 } catch (err) {
-                    showMessage("Worker error. Falling back to local Regex parser.");
+                    showMessage("Worker Error: " + err.message + ". Falling back to Local Parser.");
                     parseLocalTextRegex(rawText);
                     document.getElementById('confidence-score').innerText = "88% (Local Fallback)";
                 }
@@ -1301,6 +1308,14 @@
             });
         }
 
+        // FILTER LINK
+        function filterTransactions() {
+            const searchBox = document.getElementById('search-input');
+            if(searchBox) {
+                renderMasterTransactions(searchBox.value);
+            }
+        }
+
         function renderMasterTransactions(filterText = '') {
             const desktopBody = document.getElementById('master-table-body');
             const mobileList = document.getElementById('master-mobile-list');
@@ -1538,7 +1553,14 @@
                     })
                 });
 
-                if(!response.ok) throw new Error(`Cloud ${actionType} proxy failed.`);
+                if(!response.ok) {
+                    let errData;
+                    try { errData = await response.json(); } catch(e){}
+                    if (errData && errData.error) {
+                        throw new Error(`${errData.error} ${errData.troubleshooting || ''}`);
+                    }
+                    throw new Error(`Cloud ${actionType} proxy failed.`);
+                }
                 const data = await response.json();
                 
                 if (actionType === 'load' && data.backup) {
@@ -1558,7 +1580,7 @@
                 if(desksync) desksync.innerText = "Just now (Cloud)";
 
             } catch (err) {
-                showMessage(`Cloud ${actionType} Error: ` + err.message);
+                showMessage("Sync Error: " + err.message);
             }
         }
 
@@ -1574,7 +1596,8 @@
             const groupData = {};
             transactions.forEach(t => {
                 const cat = t.category || "Uncategorized";
-                groupData[cat] = (groupData[cat] || 0) + t.amount;
+                // FIX: Use absolute value. Negative numbers cause Doughnut charts to crash visually!
+                groupData[cat] = (groupData[cat] || 0) + Math.abs(t.amount); 
             });
 
             const labels = Object.keys(groupData);
