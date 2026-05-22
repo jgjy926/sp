@@ -1208,61 +1208,99 @@
     var txRegex =
       /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2})(?:CR)?)(?=\s+(?:\d{2}\/\d{2}\s+\d{2}\/\d{2}|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|YOUR COMBINED|KOMBINASI|Posting Date|Page\/|005\s+STATEMENT|STATEMENT OF CREDIT CARD ACCOUNT|$))/gi;
 
-    function parseTransactionsInBlock(blockText, cardInfo) {
-      txRegex.lastIndex = 0;
 
-      var txMatch;
+function parseTransactionsInBlock(blockText, cardInfo) {
+  /**
+   * Safer line-based parser.
+   * Reason:
+   * - Maybank AMEX transactions can sit after page footer/header noise.
+   * - A giant cross-block regex can fail around page boundaries or final rows.
+   * - This parser scans each reconstructed line independently.
+   */
 
-      while ((txMatch = txRegex.exec(blockText)) !== null) {
-        var postDate = txMatch[1];
-        var transDate = txMatch[2];
-        var rawDesc = txMatch[3].replace(/\s+/g, ' ').trim().toUpperCase();
-        var rawAmount = txMatch[4];
 
-        var isCredit = /CR$/i.test(rawAmount);
-        var amount = parseFloat(rawAmount.replace(/CR$/i, '').replace(/,/g, ''));
+const lines = String(blockText || '')
+  .replace(/\r/g, '\n')
+  .replace(/\s+(?=\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+)/g, '\n')
+  .split('\n')
+    .map(line => line.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean);
 
-        if (!amount || amount <= 0) continue;
+  const rowRegex =
+    /^(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2})(?:CR)?)$/i;
 
-        if (rawDesc.indexOf('PYMT@') !== -1 || rawDesc.indexOf('PAYMENT') !== -1) {
-          continue;
-        }
+  for (let rawLine of lines) {
+    const line = rawLine.trim();
 
-        if (
-          rawDesc.indexOf('TOTAL') !== -1 ||
-          rawDesc.indexOf('SUB TOTAL') !== -1 ||
-          rawDesc.indexOf('JUMLAH') !== -1 ||
-          rawDesc.indexOf('RETAIL INTEREST RATE') !== -1
-        ) {
-          continue;
-        }
-
-        var isCashback =
-          rawDesc.indexOf('CASH REBATE') !== -1 ||
-          rawDesc.indexOf('CASH BACK') !== -1 ||
-          rawDesc.indexOf('CASHBACK') !== -1 ||
-          rawDesc.indexOf('REBATE') !== -1;
-
-        if (isCashback || isCredit) {
-          if (isCashback) {
-            structuralCb.push({
-              cardInfo: cardInfo,
-              date: postDate,
-              amount: amount,
-              rawDesc: rawDesc
-            });
-          }
-        } else {
-          structuralTx.push({
-            postDate: postDate,
-            transDate: transDate,
-            cardInfo: cardInfo,
-            amount: amount,
-            rawDesc: rawDesc
-          });
-        }
-      }
+    // Skip obvious non-transaction rows.
+    if (
+      !/^\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+/.test(line) ||
+      line.includes('RETAIL INTEREST RATE') ||
+      line.includes('TOTAL CREDIT') ||
+      line.includes('TOTAL DEBIT') ||
+      line.includes('SUB TOTAL') ||
+      line.includes('JUMLAH')
+    ) {
+      continue;
     }
+
+    const txMatch = line.match(rowRegex);
+
+    if (!txMatch) {
+      continue;
+    }
+
+    const postDate = txMatch[1];
+    const transDate = txMatch[2];
+    const rawDesc = txMatch[3].replace(/\s+/g, ' ').trim().toUpperCase();
+    const rawAmount = txMatch[4];
+
+    const isCredit = /CR$/i.test(rawAmount);
+    const amount = parseFloat(
+      rawAmount
+        .replace(/CR$/i, '')
+        .replace(/,/g, '')
+    );
+
+    if (!amount || amount <= 0) {
+      continue;
+    }
+
+    const isPayment =
+      rawDesc.includes('PYMT@') ||
+      rawDesc.includes('PAYMENT');
+
+    const isCashback =
+      rawDesc.includes('CASH REBATE') ||
+      rawDesc.includes('CASH BACK') ||
+      rawDesc.includes('CASHBACK') ||
+      rawDesc.includes('REBATE');
+
+    // Cashback goes to Cashback Dashboard.
+    if (isCashback) {
+      structuralCb.push({
+        cardInfo: cardInfo,
+        date: postDate,
+        amount: amount,
+        rawDesc: rawDesc
+      });
+      continue;
+    }
+
+    // Payments are credits, not spending transactions.
+    if (isPayment || isCredit) {
+      continue;
+    }
+
+    structuralTx.push({
+      postDate: postDate,
+      transDate: transDate,
+      cardInfo: cardInfo,
+      amount: amount,
+      rawDesc: rawDesc
+    });
+  }
+}
 
     if (sections.length > 0) {
       sections.forEach(function (section, idx) {
