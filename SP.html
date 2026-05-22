@@ -8,7 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Include PDF.js securely for local client-side extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 
     <script>
@@ -75,7 +74,6 @@
 </head>
 <body class="flex h-screen overflow-hidden text-sm md:text-base">
 
-    <!-- Desktop Sidebar -->
     <aside class="hidden md:flex flex-col w-64 glass-panel border-r border-slate-700 h-full z-20">
         <div class="p-6 flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
@@ -119,9 +117,7 @@
         </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="flex-1 flex flex-col h-full relative overflow-hidden bg-dark">
-        <!-- Mobile Header -->
         <header class="md:hidden glass-panel border-b border-slate-700 p-4 flex items-center justify-between z-10">
             <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
@@ -139,10 +135,8 @@
             </div>
         </header>
 
-        <!-- Scrollable Tab Container -->
         <div id="main-scroll-area" class="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 pb-24 md:pb-8">
             
-            <!-- Tab 1: Console -->
             <section id="tab-console" class="tab-content active max-w-5xl mx-auto space-y-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div>
@@ -155,7 +149,6 @@
                     </div>
                 </div>
 
-                <!-- Upload Zone -->
                 <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary hover:bg-slate-800/50 transition-all group">
                     <div class="w-16 h-16 rounded-full bg-slate-800 group-hover:bg-primary/20 flex items-center justify-center mb-4 transition-all">
                         <i class="ph ph-upload-simple text-3xl text-slate-400 group-hover:text-primary"></i>
@@ -165,7 +158,6 @@
                     <input type="file" id="file-input" class="hidden" accept=".pdf" onchange="handleFileSelect(event)">
                 </div>
 
-                <!-- Processing Status -->
                 <div id="processing-status" class="hidden glass-panel rounded-2xl p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h4 class="font-semibold text-white flex items-center gap-2">
@@ -178,7 +170,6 @@
                     </div>
                 </div>
 
-                <!-- Text Debugger Panel -->
                 <div id="raw-text-panel" class="hidden glass-panel rounded-2xl p-4 border border-slate-700">
                     <button onclick="toggleRawTextInspector()" class="w-full flex items-center justify-between text-slate-300 hover:text-white transition-colors">
                         <span class="font-medium flex items-center gap-2">
@@ -192,7 +183,6 @@
                     </div>
                 </div>
 
-                <!-- Extracted Data Table -->
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden" id="extraction-results">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                         <h3 class="font-semibold text-white" id="parsed-summary-title">Extracted Transactions</h3>
@@ -202,7 +192,6 @@
                         </div>
                     </div>
 
-                    <!-- Global Document Insight Banner -->
                     <div id="global-doc-insight" class="hidden bg-indigo-950/40 border-b border-slate-700 p-3 px-4 flex flex-col md:flex-row md:items-center justify-between gap-2">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-lg bg-indigo-900/50 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
@@ -210,13 +199,13 @@
                             </div>
                             <div>
                                 <div class="text-[10px] text-indigo-300/80 font-semibold uppercase tracking-wider mb-0.5">Detected Source Document</div>
-                                <div class="text-sm font-bold text-white flex items-center gap-2">
+                                <div class="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
                                     <span id="global-bank-label">Scanning...</span>
                                 </div>
                             </div>
                         </div>
                         <div class="text-xs text-slate-400 flex items-center gap-1.5 bg-slate-900/50 px-2 py-1 rounded">
-                            <i class="ph ph-info"></i> Applied as default to all entries below
+                            <i class="ph ph-info"></i> Cards mapped automatically
                         </div>
                     </div>
 
@@ -231,21 +220,18 @@
                                 </tr>
                             </thead>
                             <tbody id="extracted-table-body" class="divide-y divide-slate-700/50">
-                                <!-- Populated by JS -->
-                            </tbody>
+                                </tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- Tab 2: Analytics -->
             <section id="tab-analytics" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div>
                     <h2 class="text-2xl font-bold text-white">Analytics</h2>
                     <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
                 </div>
 
-                <!-- Summary Cards -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="glass-panel p-4 rounded-2xl border border-slate-700">
                         <p class="text-xs text-slate-400 mb-1">Total Spent</p>
@@ -266,7 +252,6 @@
                     </div>
                 </div>
 
-                <!-- Chart Area -->
                 <div class="glass-panel p-4 rounded-2xl border border-slate-700">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-semibold text-white">Spending by Category</h3>
@@ -277,7 +262,6 @@
                     </div>
                 </div>
 
-                <!-- Master Transaction List -->
                 <div class="glass-panel rounded-2xl border border-slate-700 flex flex-col">
                     <div class="p-4 border-b border-slate-700 flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-800/50">
                         <h3 class="font-semibold text-white w-full md:w-auto">All Transactions</h3>
@@ -287,7 +271,6 @@
                         </div>
                     </div>
                     
-                    <!-- Desktop Table View -->
                     <div class="hidden md:block overflow-x-auto">
                         <table class="w-full text-left text-sm text-slate-300">
                             <thead class="bg-slate-800 text-slate-400">
@@ -300,19 +283,15 @@
                                 </tr>
                             </thead>
                             <tbody id="master-table-body" class="divide-y divide-slate-700/50">
-                                <!-- Populated by JS -->
-                            </tbody>
+                                </tbody>
                         </table>
                     </div>
 
-                    <!-- Mobile Card View -->
                     <div id="master-mobile-list" class="md:hidden flex flex-col divide-y divide-slate-700/50">
-                        <!-- Populated by JS -->
-                    </div>
+                        </div>
                 </div>
             </section>
 
-            <!-- Tab 3: Cashback Hub -->
             <section id="tab-cashback" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div class="flex justify-between items-end">
                     <div>
@@ -324,34 +303,28 @@
                     </button>
                 </div>
 
-                <!-- Total Summary Metric -->
                 <div class="glass-panel p-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/10 flex flex-col items-center justify-center text-center">
                     <p class="text-sm text-emerald-400 font-medium mb-2 uppercase tracking-wide">Total Monthly Cashback</p>
                     <div class="text-4xl md:text-5xl font-bold text-white">RM <span id="cashback-total-amount">0.00</span></div>
                 </div>
 
-                <!-- Breakdown by Bank -->
                 <div>
                     <h3 class="font-semibold text-white mb-4 flex items-center gap-2"><i class="ph ph-bank text-indigo-400"></i> Breakdown by Source</h3>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="cashback-cards-container">
-                        <!-- Populated by JS grouping -->
-                    </div>
+                        </div>
                 </div>
                 
-                <!-- History Table -->
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
                     <div class="p-4 border-b border-slate-700 bg-slate-800/50">
                         <h3 class="font-semibold text-white">Extracted Cashback Entries</h3>
                     </div>
                     <div class="p-0">
                         <ul id="cashback-history-list" class="divide-y divide-slate-700/50 max-h-96 overflow-y-auto no-scrollbar">
-                            <!-- Populated by JS -->
-                        </ul>
+                            </ul>
                     </div>
                 </div>
             </section>
 
-            <!-- Tab 4: Maintenance Hub (Rule Engine) -->
             <section id="tab-maintenance" class="tab-content max-w-5xl mx-auto space-y-6">
                  <div class="flex justify-between items-end">
                     <div>
@@ -363,18 +336,15 @@
                     </button>
                 </div>
 
-                <!-- Dynamic Category Manager -->
                 <div class="glass-panel p-5 rounded-2xl border border-slate-700">
                     <h3 class="font-semibold text-white mb-1 text-sm flex items-center gap-2">
                         <i class="ph ph-tag text-indigo-400"></i> Category Manager
                     </h3>
                     <p class="text-slate-400 text-xs mb-3">Manage categorization tags. LLM parsing will automatically learn and append new categories here.</p>
                     <div id="category-chips-container" class="flex flex-wrap gap-2 items-center">
-                        <!-- Populated by JS -->
-                    </div>
+                        </div>
                 </div>
 
-                <!-- Live Rule Sandbox Sandbox -->
                 <div class="glass-panel p-6 rounded-2xl border border-indigo-500/20 bg-indigo-950/10">
                     <h3 class="font-semibold text-white mb-2 flex items-center gap-2 text-base">
                         <i class="ph ph-shield-check text-indigo-400"></i> Local Parsing Sandbox
@@ -392,14 +362,12 @@
                     </div>
                 </div>
 
-                <!-- Rules Database Table -->
                 <div class="glass-panel rounded-2xl border border-slate-700 flex flex-col overflow-hidden">
                     <div class="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                         <h3 class="font-semibold text-white">Merchant Renaming & Mapping Rules</h3>
                         <span id="rule-count-badge" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium">0 active rules</span>
                     </div>
                     
-                    <!-- Rules Table -->
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-slate-300 min-w-[500px]">
                             <thead class="bg-slate-800 text-slate-400">
@@ -411,14 +379,12 @@
                                 </tr>
                             </thead>
                             <tbody id="rules-table-body" class="divide-y divide-slate-700/50">
-                                <!-- Populated dynamically by JS -->
-                            </tbody>
+                                </tbody>
                         </table>
                     </div>
                 </div>
             </section>
 
-            <!-- Tab 5: Setup -->
             <section id="tab-setup" class="tab-content max-w-3xl mx-auto space-y-6">
                  <div>
                     <h2 class="text-2xl font-bold text-white">System Setup</h2>
@@ -468,7 +434,6 @@
             </section>
         </div>
 
-        <!-- Bottom Navigation Mobile -->
         <nav class="md:hidden glass-panel border-t border-slate-700 flex justify-around items-center h-16 pb-safe z-20">
             <button onclick="switchTab('console')" id="nav-mobile-console" class="flex flex-col items-center justify-center w-full h-full text-slate-400 hover:text-white transition-colors active-nav-mobile text-white">
                 <i class="ph ph-terminal-window text-2xl mb-1"></i>
@@ -493,7 +458,6 @@
         </nav>
     </main>
 
-    <!-- Password Modal -->
     <div id="password-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-sm animate-bounce-in">
             <div class="text-center mb-6">
@@ -511,7 +475,6 @@
         </div>
     </div>
 
-    <!-- Edit Transaction Modal -->
     <div id="edit-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-md">
             <h3 class="text-lg font-bold text-white mb-4" id="edit-modal-title">Edit Transaction</h3>
@@ -554,7 +517,6 @@
                     <button type="button" onclick="closeEditModal()" class="flex-1 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">Cancel</button>
                     <button type="button" onclick="saveEditTransaction()" class="flex-1 py-2 rounded-lg bg-primary text-white hover:bg-secondary transition-colors font-medium">Save</button>
                 </div>
-                <!-- Link with Create Rule button -->
                 <div class="pt-2">
                     <button type="button" onclick="createRuleFromEdit()" class="w-full py-2 rounded-lg bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/80 transition-colors border border-indigo-700/50 text-xs flex items-center justify-center gap-2">
                         <i class="ph ph-magic-wand"></i> Create Automapping Rule for this Merchant
@@ -564,7 +526,6 @@
         </div>
     </div>
 
-    <!-- Maintenance Rule Builder Modal -->
     <div id="rule-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
         <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-md animate-bounce-in">
             <h3 class="text-lg font-bold text-white mb-4" id="rule-modal-title">Rule Builder Mapping</h3>
@@ -584,8 +545,7 @@
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">Target Category</label>
                         <select id="rule-category" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary">
-                            <!-- Populated dynamically -->
-                        </select>
+                            </select>
                     </div>
                 </div>
 
@@ -947,32 +907,33 @@
             let matchedTransactions = [];
             let matchedCashbacks = [];
             
-            let detectedCardInfo = "Unknown Card";
-            let bankName = "Unidentified Bank";
-            
-            const headerCheck = lines.slice(0, 40).join(' ');
-            const cardMatch = headerCheck.match(/(?:XXXX|xxxx|\*\*\*\*)[-\s]?(\d{4})/);
-            const bankMatch = headerCheck.match(/(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i);
-            
-            if (bankMatch) bankName = bankMatch[1];
-            if (cardMatch) {
-                detectedCardInfo = (bankMatch ? bankMatch[1] + " " : "Card ") + "**** " + cardMatch[1];
-            } else if (bankMatch) {
-                detectedCardInfo = bankMatch[1] + " Account";
-            }
+            // 1. Detect the primary bank name once from the top
+            let globalBankName = "Unidentified Bank";
+            const topText = lines.slice(0, 50).join(' ');
+            const bankMatch = topText.match(/(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i);
+            if (bankMatch) globalBankName = bankMatch[1];
 
-            const insightPanel = document.getElementById('global-doc-insight');
-            const insightLabel = document.getElementById('global-bank-label');
-            if(insightPanel && insightLabel) {
-                insightPanel.classList.remove('hidden');
-                insightLabel.innerHTML = `${bankName} <span class="text-indigo-400 ml-3 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${cardMatch ? '**** ' + cardMatch[1] : 'No Card # Found'}</span>`;
-            }
-
+            // 2. Stateful tracking for consolidated statements
+            let currentCardNumber = "No Card #";
+            let cardsFound = new Set(); // To track all unique cards found for the UI
+            
             const rowPattern = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})?\s+([\s\S]+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2}))/g;
             let idCounter = Date.now();
             
             lines.forEach(line => {
                 const cleanLine = line.trim();
+                
+                // 3. Rolling Check: Update active card if a new card header appears
+                // Expanded regex to catch variations like "Card No. 1234" or "XXXX-1234"
+                const cardMatch = cleanLine.match(/(?:(?:XXXX|xxxx|\*\*\*\*)[-\s]?|Card\s(?:No\.?\s)?|ending\sin\s)(\d{4})/i);
+                if (cardMatch) {
+                    currentCardNumber = "**** " + cardMatch[1];
+                    cardsFound.add(currentCardNumber);
+                }
+
+                // Construct the active card signature for this specific row
+                const activeCardInfo = `${globalBankName} ${currentCardNumber}`.trim();
+
                 let match;
                 rowPattern.lastIndex = 0;
                 
@@ -985,24 +946,22 @@
                     
                     if (amount > 0 && rawDesc.length > 2 && !rawDesc.includes('TOTAL') && !rawDesc.includes('SUBTOTAL')) {
                         const ruleMapping = runRuleEngineOnText(rawDesc);
-                        
-                        // Purely parse cashback string entries from statement logic
                         const isCashback = rawDesc.includes("CASH BACK") || rawDesc.includes("CASHBACK") || rawDesc.includes("REBATE") || rawDesc.includes("REWARD");
 
                         if (isCashback) {
                             matchedCashbacks.push({
-                                id: idCounter,
-                                card: detectedCardInfo,
+                                id: idCounter++,
+                                card: activeCardInfo,
                                 date: postDate,
-                                merchant: rawDesc, // Keep raw string for cashback hub list
+                                merchant: rawDesc,
                                 amount: amount
                             });
                         } else {
                             matchedTransactions.push({
-                                id: idCounter,
+                                id: idCounter++,
                                 postDate: postDate,
                                 transDate: transDate,
-                                cardInfo: detectedCardInfo,
+                                cardInfo: activeCardInfo, // Assigns the most recently scanned card
                                 merchant: rawDesc,
                                 mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawDesc,
                                 category: ruleMapping.category,
@@ -1010,10 +969,26 @@
                                 amount: amount
                             });
                         }
-                        idCounter++;
                     }
                 }
             });
+
+            // 4. Update the Global Insight Banner with multiple badges
+            const insightPanel = document.getElementById('global-doc-insight');
+            const insightLabel = document.getElementById('global-bank-label');
+            if(insightPanel && insightLabel) {
+                insightPanel.classList.remove('hidden');
+                
+                let cardBadges = Array.from(cardsFound).map(c => 
+                    `<span class="text-indigo-400 ml-2 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${c}</span>`
+                ).join('');
+                
+                if (cardsFound.size === 0) {
+                    cardBadges = `<span class="text-indigo-400 ml-3 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">No Card # Found</span>`;
+                }
+                
+                insightLabel.innerHTML = `${globalBankName} ${cardBadges}`;
+            }
 
             if (matchedTransactions.length > 0 || matchedCashbacks.length > 0) {
                 transactions = [...transactions, ...matchedTransactions];
