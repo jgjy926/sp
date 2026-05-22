@@ -137,44 +137,18 @@
 
         <div id="main-scroll-area" class="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 pb-24 md:pb-8">
             
-            <section id="tab-console" class="tab-content active max-w-5xl mx-auto space-y-6">
-<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-  <div>
-    <h2 class="text-2xl font-bold text-white">Analytics</h2>
-    <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
+<section id="tab-console" class="tab-content active max-w-5xl mx-auto space-y-6">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div>
+      <h2 class="text-2xl font-bold text-white">Parser Console</h2>
+      <p class="text-slate-400 text-sm">Upload, decrypt, and parse statements securely.</p>
+    </div>
+
+    <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
+      <span class="text-xs text-slate-400">Confidence:</span>
+      <span id="confidence-score" class="font-bold text-green-400">--%</span>
+    </div>
   </div>
-
-  <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
-    <select
-      id="analytics-year-filter"
-      onchange="onPeriodFilterChanged('analytics')"
-      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
-    >
-      <option value="all">All Years</option>
-    </select>
-
-    <select
-      id="analytics-month-filter"
-      onchange="onPeriodFilterChanged('analytics')"
-      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
-    >
-      <option value="all">All Months</option>
-    </select>
-
-    <button
-      onclick="resetPeriodFilter()"
-      class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
-    >
-      Reset
-    </button>
-  </div>
-</div>
-                    <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
-                        <span class="text-xs text-slate-400">Confidence:</span>
-                        <span id="confidence-score" class="font-bold text-green-400">--%</span>
-                    </div>
-                </div>
-
                 <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary hover:bg-slate-800/50 transition-all group">
                     <div class="w-16 h-16 rounded-full bg-slate-800 group-hover:bg-primary/20 flex items-center justify-center mb-4 transition-all">
                         <i class="ph ph-upload-simple text-3xl text-slate-400 group-hover:text-primary"></i>
@@ -289,10 +263,38 @@
                 </div>
             </section>
 
-            <section id="tab-analytics" class="tab-content max-w-5xl mx-auto space-y-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-white">Analytics</h2>
-                    <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
+            <section id="tab-analytics" class="tab-content max-w-5xl mx-auto space-y-6"> 
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+  <div>
+    <h2 class="text-2xl font-bold text-white">Analytics</h2>
+    <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
+  </div>
+
+  <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
+    <select
+      id="analytics-year-filter"
+      onchange="onPeriodFilterChanged('analytics')"
+      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+    >
+      <option value="all">All Years</option>
+    </select>
+
+    <select
+      id="analytics-month-filter"
+      onchange="onPeriodFilterChanged('analytics')"
+      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+    >
+      <option value="all">All Months</option>
+    </select>
+
+    <button
+      onclick="resetPeriodFilter()"
+      class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
+    >
+      Reset
+    </button>
+  </div>
+</div>
                 </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
