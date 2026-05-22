@@ -838,7 +838,7 @@
             tryUnlockAndLoadPDF(pass);
         }
 
-        async function executeTextParsing(rawText) {
+async function executeTextParsing(rawText) {
             const statusBox = document.getElementById('processing-status');
             const bar = document.getElementById('process-bar');
             
@@ -852,32 +852,24 @@
                             documentText: rawText,
                             useAI: sessionSettings.useAI,
                             aiModel: sessionSettings.aiModel,
-                            existingCategories: appCategories, 
-                            allowNewCategories: true, 
-                            fileName: selectedFileName
+                            existingCategories: appCategories
                         })
                     });
                     
-                    if (!response.ok) {
-                        let errData;
-                        try { errData = await response.json(); } catch(e){}
-                        if (errData && errData.error) {
-                            throw new Error(`${errData.error} ${errData.troubleshooting || ''}`);
-                        }
-                        throw new Error("Worker responded with error status");
-                    }
+                    if (!response.ok) throw new Error("Worker responded with error status");
                     const result = await response.json();
                     
+                    // PASS THE rawText DOWN SO WE CAN PERFORM THE HYBRID MERGE
                     if (result.transactions && Array.isArray(result.transactions)) {
-                        parseSourcedTransactions(JSON.stringify(result.transactions));
+                        parseSourcedTransactions(JSON.stringify(result.transactions), rawText);
                     } else if (result.data) {
-                        parseSourcedTransactions(result.data);
+                        parseSourcedTransactions(result.data, rawText);
                     } else {
                         parseLocalTextRegex(rawText);
                     }
                     
-                    document.getElementById('confidence-score').innerText = sessionSettings.useAI ? "99% (AI)" : "92% (Worker)";
-                    showMessage("Worker sync parse completed.");
+                    document.getElementById('confidence-score').innerText = sessionSettings.useAI ? "99% (Hybrid AI)" : "92% (Worker)";
+                    showMessage("Hybrid Sync Parse completed.");
 
                 } catch (err) {
                     showMessage("Worker Error: " + err.message + ". Falling back to Local Parser.");
@@ -895,41 +887,183 @@
                 document.getElementById('extraction-results').classList.remove('hidden');
                 document.getElementById('parsed-summary-title').innerText = `Extracted from: ${selectedFileName}`;
                 renderAll();
-                
-                setTimeout(() => {
-                    switchTab('analytics');
-                }, 1000);
+                setTimeout(() => switchTab('analytics'), 1000);
             }, 500);
         }
 
-        function parseLocalTextRegex(text) {
+        // --- NEW: Core Structural Extractor (Used by both Local and Hybrid engines) ---
+        function extractLocalStructure(text) {
             const lines = text.split('\n');
-            let matchedTransactions = [];
-            let matchedCashbacks = [];
+            let structuralTx = [];
+            let structuralCb = [];
             
-            // 1. Detect the primary bank name once from the top
             let globalBankName = "Unidentified Bank";
-            const topText = lines.slice(0, 50).join(' ');
-            const bankMatch = topText.match(/(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i);
+            const bankMatch = lines.slice(0, 50).join(' ').match(/(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i);
             if (bankMatch) globalBankName = bankMatch[1];
 
-            // 2. Stateful tracking for consolidated statements
             let currentCardNumber = "No Card #";
-            let cardsFound = new Set(); // To track all unique cards found for the UI
-            
+            let cardsFound = new Set();
             const rowPattern = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})?\s+([\s\S]+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2}))/g;
-            let idCounter = Date.now();
             
             lines.forEach(line => {
                 const cleanLine = line.trim();
                 
-                // 3. Rolling Check: Update active card if a new card header appears
-                // Expanded regex to catch variations like "Card No. 1234" or "XXXX-1234"
+                // Rolling State Cursor for Card Numbers
                 const cardMatch = cleanLine.match(/(?:(?:XXXX|xxxx|\*\*\*\*)[-\s]?|Card\s(?:No\.?\s)?|ending\sin\s)(\d{4})/i);
                 if (cardMatch) {
                     currentCardNumber = "**** " + cardMatch[1];
                     cardsFound.add(currentCardNumber);
                 }
+
+                const activeCardInfo = `${globalBankName} ${currentCardNumber}`.trim();
+                let match;
+                rowPattern.lastIndex = 0;
+                
+                while ((match = rowPattern.exec(cleanLine)) !== null) {
+                    const postDate = match[1];
+                    const transDate = match[2] || postDate;
+                    const rawDesc = match[3].trim().toUpperCase();
+                    const amount = parseFloat(match[4].replace(/,/g, ''));
+                    
+                    if (amount > 0 && rawDesc.length > 2 && !rawDesc.includes('TOTAL') && !rawDesc.includes('SUBTOTAL')) {
+                        const isCb = rawDesc.includes("CASH BACK") || rawDesc.includes("CASHBACK") || rawDesc.includes("REBATE");
+                        if (isCb) {
+                            structuralCb.push({ cardInfo: activeCardInfo, date: postDate, amount: amount, rawDesc });
+                        } else {
+                            structuralTx.push({ postDate, transDate, cardInfo: activeCardInfo, amount: amount, rawDesc });
+                        }
+                    }
+                }
+            });
+
+            return { structuralTx, structuralCb, cardsFound, globalBankName };
+        }
+
+        // --- HYBRID AI MERGE FUNCTION ---
+        function parseSourcedTransactions(aiString, rawText) {
+            try {
+                const cleanJson = JSON.parse(aiString);
+                if (Array.isArray(cleanJson)) {
+                    
+                    // 1. SILENT LOCAL PARSE: Get 100% accurate card mapping structure
+                    const localData = extractLocalStructure(rawText);
+                    let availableLocalTx = [...localData.structuralTx]; // Clone to prevent collision matching
+
+                    // 2. Update Insight Banner directly from Local certainty
+                    const insightPanel = document.getElementById('global-doc-insight');
+                    const insightLabel = document.getElementById('global-bank-label');
+                    if(insightPanel && insightLabel) {
+                        insightPanel.classList.remove('hidden');
+                        let cardBadges = Array.from(localData.cardsFound).map(c => 
+                            `<span class="text-indigo-400 ml-2 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${c}</span>`
+                        ).join('');
+                        
+                        if (localData.cardsFound.size === 0) {
+                            cardBadges = `<span class="text-indigo-400 ml-3 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">No Card # Found</span>`;
+                        }
+                        insightLabel.innerHTML = `${localData.globalBankName} ${cardBadges} <span class="text-emerald-400 ml-3 text-xs border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-900/30"><i class="ph ph-magic-wand"></i> Hybrid Local-AI</span>`;
+                    }
+
+                    // Learn new categories from AI
+                    cleanJson.forEach(t => {
+                        if (t.category && !appCategories.includes(t.category) && t.category !== 'Uncategorized') {
+                            appCategories.push(t.category);
+                        }
+                    });
+                    renderCategories();
+
+                    const parsedTx = [];
+                    let idCounter = Date.now();
+
+                    cleanJson.forEach((t) => {
+                        const rawMerc = t.merchant || 'Generic';
+                        const aiCat = t.category || 'Uncategorized';
+                        const amt = parseFloat(t.amount) || 0.00;
+                        const date = t.postDate || 'Today';
+
+                        // 3. THE MAGIC MERGE: Find the exact same transaction in the Local mapping by Amount & Date
+                        let exactCardMatch = t.cardInfo || localData.globalBankName; // Default to AI's guess
+                        
+                        const localIndexMatch = availableLocalTx.findIndex(lt => lt.amount === amt && lt.postDate === date);
+                        if (localIndexMatch > -1) {
+                            exactCardMatch = availableLocalTx[localIndexMatch].cardInfo; // Steal local accuracy!
+                            availableLocalTx.splice(localIndexMatch, 1); // Remove from pool to prevent collisions
+                        }
+
+                        let matchedRule = rules.find(r => rawMerc.toUpperCase().includes(r.trigger.toUpperCase()) || r.trigger.toUpperCase() === aiCat.toUpperCase());
+                        const isCashback = rawMerc.toUpperCase().includes("CASHBACK") || rawMerc.toUpperCase().includes("REBATE") || aiCat.toUpperCase().includes("CASHBACK");
+
+                        if (isCashback) {
+                            cashbacks.push({ id: idCounter++, card: exactCardMatch, date: date, merchant: rawMerc, amount: amt });
+                        } else {
+                            parsedTx.push({
+                                id: idCounter++,
+                                postDate: date,
+                                transDate: t.transDate || date,
+                                cardInfo: exactCardMatch, // 100% accurate hybrid card info
+                                merchant: rawMerc,
+                                mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
+                                category: (matchedRule ? matchedRule.category : aiCat),
+                                details: t.details || '',
+                                amount: amt
+                            });
+                        }
+                    });
+
+                    transactions = [...transactions, ...parsedTx];
+                }
+            } catch(e) {
+                console.error("Hybrid Merge Failed, falling back to Local", e);
+                parseLocalTextRegex(rawText);
+            }
+        }
+
+        // --- PURE LOCAL FALLBACK ---
+        function parseLocalTextRegex(text) {
+            const localData = extractLocalStructure(text);
+            let idCounter = Date.now();
+            let matchedTransactions = [];
+            
+            // 1. Setup UI
+            const insightPanel = document.getElementById('global-doc-insight');
+            const insightLabel = document.getElementById('global-bank-label');
+            if(insightPanel && insightLabel) {
+                insightPanel.classList.remove('hidden');
+                let cardBadges = Array.from(localData.cardsFound).map(c => 
+                    `<span class="text-indigo-400 ml-2 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${c}</span>`
+                ).join('');
+                insightLabel.innerHTML = `${localData.globalBankName} ${cardBadges}`;
+            }
+
+            // 2. Map standard rule engine over local results
+            localData.structuralTx.forEach(t => {
+                const ruleMapping = runRuleEngineOnText(t.rawDesc);
+                matchedTransactions.push({
+                    id: idCounter++,
+                    postDate: t.postDate,
+                    transDate: t.transDate,
+                    cardInfo: t.cardInfo, 
+                    merchant: t.rawDesc,
+                    mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : t.rawDesc,
+                    category: ruleMapping.category,
+                    details: '',
+                    amount: t.amount
+                });
+            });
+
+            // 3. Format cashbacks
+            const matchedCb = localData.structuralCb.map(c => ({
+                id: idCounter++, card: c.cardInfo, date: c.date, merchant: c.rawDesc, amount: c.amount
+            }));
+
+            if (matchedTransactions.length > 0 || matchedCb.length > 0) {
+                transactions = [...transactions, ...matchedTransactions];
+                cashbacks = [...cashbacks, ...matchedCb];
+                showMessage(`Parsed ${matchedTransactions.length} items using Local Rule Engine.`);
+            } else {
+                showMessage("No transactional rows detected. Please check Raw Text Inspector.");
+            }
+        }
 
                 // Construct the active card signature for this specific row
                 const activeCardInfo = `${globalBankName} ${currentCardNumber}`.trim();
