@@ -32,7 +32,7 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
         body {
             font-family: 'Inter', sans-serif;
@@ -41,14 +41,12 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Hide scrollbar for Chrome, Safari and Opera */
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
-        /* Hide scrollbar for IE, Edge and Firefox */
         .no-scrollbar {
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
+            -ms-overflow-style: none;
+            scrollbar-width: none;
         }
 
         .glass-panel {
@@ -70,7 +68,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Mobile safe area padding */
         .pb-safe {
             padding-bottom: env(safe-area-inset-bottom, 20px);
         }
@@ -78,7 +75,7 @@
 </head>
 <body class="flex h-screen overflow-hidden text-sm md:text-base">
 
-    <!-- Desktop Sidebar (Hidden on Mobile) -->
+    <!-- Desktop Sidebar -->
     <aside class="hidden md:flex flex-col w-64 glass-panel border-r border-slate-700 h-full z-20">
         <div class="p-6 flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg">
@@ -108,8 +105,16 @@
         </nav>
         <div class="p-4 border-t border-slate-700">
             <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
-                <span>Cloudflare Sync</span>
-                <span id="sync-status-desk" class="text-green-400">Active</span>
+                <span>Cloud Storage</span>
+                <span id="sync-status-desk" class="text-indigo-400 text-[10px]">Unsynced</span>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="cloudSyncAction('sync')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded text-xs transition-colors flex justify-center items-center gap-1 border border-slate-600">
+                    <i class="ph ph-cloud-arrow-up"></i> Sync
+                </button>
+                <button onclick="cloudSyncAction('load')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded text-xs transition-colors flex justify-center items-center gap-1 border border-slate-600">
+                    <i class="ph ph-cloud-arrow-down"></i> Load
+                </button>
             </div>
         </div>
     </aside>
@@ -124,10 +129,14 @@
                 </div>
                 <h1 class="font-bold text-white text-base">Statement Parser</h1>
             </div>
-            <button onclick="manualSync()" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 relative">
-                <i class="ph ph-arrows-clockwise"></i>
-                <span id="sync-dot" class="absolute top-0 right-0 w-2 h-2 bg-green-500 rounded-full hidden"></span>
-            </button>
+            <div class="flex gap-2">
+                <button onclick="cloudSyncAction('load')" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+                    <i class="ph ph-cloud-arrow-down"></i>
+                </button>
+                <button onclick="cloudSyncAction('sync')" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400">
+                    <i class="ph ph-cloud-arrow-up"></i>
+                </button>
+            </div>
         </header>
 
         <!-- Scrollable Tab Container -->
@@ -169,21 +178,53 @@
                     </div>
                 </div>
 
+                <!-- Text Debugger Panel -->
+                <div id="raw-text-panel" class="hidden glass-panel rounded-2xl p-4 border border-slate-700">
+                    <button onclick="toggleRawTextInspector()" class="w-full flex items-center justify-between text-slate-300 hover:text-white transition-colors">
+                        <span class="font-medium flex items-center gap-2">
+                            <i class="ph ph-file-text text-indigo-400"></i> Raw Extracted Text Inspector
+                        </span>
+                        <i id="raw-text-chevron" class="ph ph-caret-down transition-transform"></i>
+                    </button>
+                    <div id="raw-text-container" class="hidden mt-3 pt-3 border-t border-slate-800">
+                        <p class="text-xs text-slate-400 mb-2">Here is the exact character stream read by PDF.js inside your browser. You can use this to see if the PDF text is scrambled or columns are misaligned:</p>
+                        <textarea id="raw-text-output" readonly class="w-full h-48 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-slate-700 no-scrollbar"></textarea>
+                    </div>
+                </div>
+
                 <!-- Extracted Data Table -->
-                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden hidden" id="extraction-results">
+                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden" id="extraction-results">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                         <h3 class="font-semibold text-white" id="parsed-summary-title">Extracted Transactions</h3>
                         <div class="flex gap-2">
-                            <button class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addRuleFromConsole()">+ Create Parsing Rule</button>
+                            <button class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addRuleFromConsole()">+ Add Rule</button>
                             <button class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addManualTransaction()">+ Manual Entry</button>
                         </div>
                     </div>
+
+                    <!-- Global Document Insight Banner -->
+                    <div id="global-doc-insight" class="hidden bg-indigo-950/40 border-b border-slate-700 p-3 px-4 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-900/50 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                                <i class="ph ph-bank text-xl"></i>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-indigo-300/80 font-semibold uppercase tracking-wider mb-0.5">Detected Source Document</div>
+                                <div class="text-sm font-bold text-white flex items-center gap-2">
+                                    <span id="global-bank-label">Scanning...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-slate-400 flex items-center gap-1.5 bg-slate-900/50 px-2 py-1 rounded">
+                            <i class="ph ph-info"></i> Applied as default to all entries below
+                        </div>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-slate-300 min-w-[600px]">
                             <thead class="bg-slate-800 text-slate-400">
                                 <tr>
-                                    <th class="px-4 py-3 font-medium">Post Date</th>
-                                    <th class="px-4 py-3 font-medium">Trans Date</th>
+                                    <th class="px-4 py-3 font-medium">Date / Card Info</th>
                                     <th class="px-4 py-3 font-medium">Merchant Details / Mapped Category</th>
                                     <th class="px-4 py-3 font-medium text-right">Amount (RM)</th>
                                     <th class="px-4 py-3 font-medium text-center">Action</th>
@@ -229,9 +270,9 @@
                 <div class="glass-panel p-4 rounded-2xl border border-slate-700">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-semibold text-white">Spending by Category</h3>
-                        <span class="text-xs text-slate-400">Auto-assigned via Rule Engine</span>
+                        <span class="text-xs text-slate-400">Click a category segment to filter transactions</span>
                     </div>
-                    <div class="h-64 md:h-80">
+                    <div class="h-64 md:h-80 relative group">
                         <canvas id="spendingChart"></canvas>
                     </div>
                 </div>
@@ -251,9 +292,9 @@
                         <table class="w-full text-left text-sm text-slate-300">
                             <thead class="bg-slate-800 text-slate-400">
                                 <tr>
-                                    <th class="px-4 py-3 font-medium w-24">Date</th>
+                                    <th class="px-4 py-3 font-medium w-32">Date / Card</th>
                                     <th class="px-4 py-3 font-medium">Merchant</th>
-                                    <th class="px-4 py-3 font-medium">Category / Installment</th>
+                                    <th class="px-4 py-3 font-medium">Category / Details</th>
                                     <th class="px-4 py-3 font-medium text-right w-32">Amount (RM)</th>
                                     <th class="px-4 py-3 font-medium text-center w-24">Actions</th>
                                 </tr>
@@ -275,22 +316,35 @@
             <section id="tab-cashback" class="tab-content max-w-5xl mx-auto space-y-6">
                 <div class="flex justify-between items-end">
                     <div>
-                        <h2 class="text-2xl font-bold text-white">Cashback Hub</h2>
-                        <p class="text-slate-400 text-sm">Auto-detected savings grouped by credit card profiles.</p>
+                        <h2 class="text-2xl font-bold text-white">Cashback Dashboard</h2>
+                        <p class="text-slate-400 text-sm">Total savings extracted directly from statements and manual entries.</p>
                     </div>
-                    <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600" onclick="addManualCashback()">+ Add</button>
+                    <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600 flex items-center gap-2" onclick="addManualCashback()">
+                        <i class="ph ph-plus"></i> Add Entry
+                    </button>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="cashback-cards-container">
-                    <!-- Populated by JS grouping -->
+                <!-- Total Summary Metric -->
+                <div class="glass-panel p-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/10 flex flex-col items-center justify-center text-center">
+                    <p class="text-sm text-emerald-400 font-medium mb-2 uppercase tracking-wide">Total Monthly Cashback</p>
+                    <div class="text-4xl md:text-5xl font-bold text-white">RM <span id="cashback-total-amount">0.00</span></div>
+                </div>
+
+                <!-- Breakdown by Bank -->
+                <div>
+                    <h3 class="font-semibold text-white mb-4 flex items-center gap-2"><i class="ph ph-bank text-indigo-400"></i> Breakdown by Source</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="cashback-cards-container">
+                        <!-- Populated by JS grouping -->
+                    </div>
                 </div>
                 
+                <!-- History Table -->
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
                     <div class="p-4 border-b border-slate-700 bg-slate-800/50">
-                        <h3 class="font-semibold text-white">Recent Cashback History</h3>
+                        <h3 class="font-semibold text-white">Extracted Cashback Entries</h3>
                     </div>
                     <div class="p-0">
-                        <ul id="cashback-history-list" class="divide-y divide-slate-700/50">
+                        <ul id="cashback-history-list" class="divide-y divide-slate-700/50 max-h-96 overflow-y-auto no-scrollbar">
                             <!-- Populated by JS -->
                         </ul>
                     </div>
@@ -302,11 +356,22 @@
                  <div class="flex justify-between items-end">
                     <div>
                         <h2 class="text-2xl font-bold text-white">Maintenance Hub</h2>
-                        <p class="text-slate-400 text-sm">Control mapping rules, categorizations, and cashback rules.</p>
+                        <p class="text-slate-400 text-sm">Manage categorizations and set up renaming rules for ugly merchant strings.</p>
                     </div>
                     <button class="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-lg text-sm transition-colors font-medium flex items-center gap-2" onclick="openRuleModal(null)">
                         <i class="ph ph-plus-bold"></i> Add Rule
                     </button>
+                </div>
+
+                <!-- Dynamic Category Manager -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-700">
+                    <h3 class="font-semibold text-white mb-1 text-sm flex items-center gap-2">
+                        <i class="ph ph-tag text-indigo-400"></i> Category Manager
+                    </h3>
+                    <p class="text-slate-400 text-xs mb-3">Manage categorization tags. LLM parsing will automatically learn and append new categories here.</p>
+                    <div id="category-chips-container" class="flex flex-wrap gap-2 items-center">
+                        <!-- Populated by JS -->
+                    </div>
                 </div>
 
                 <!-- Live Rule Sandbox Sandbox -->
@@ -314,15 +379,15 @@
                     <h3 class="font-semibold text-white mb-2 flex items-center gap-2 text-base">
                         <i class="ph ph-shield-check text-indigo-400"></i> Local Parsing Sandbox
                     </h3>
-                    <p class="text-slate-400 text-xs mb-4">Paste or type a raw description from your PDF statement below to test how the Rule Engine resolves it instantly.</p>
+                    <p class="text-slate-400 text-xs mb-4">Paste or type a raw description (or category name) from your PDF statement below to test how the Rule Engine resolves it instantly.</p>
                     
                     <div class="flex flex-col md:flex-row gap-4 items-stretch">
                         <div class="flex-1">
-                            <input type="text" id="sandbox-input" placeholder="e.g. MUSEE PLATINUM TOKYO-E-E6 :005/006" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-primary text-sm" oninput="testSandbox()">
+                            <input type="text" id="sandbox-input" placeholder="e.g. MUSEE PLATINUM TOKYO or Dining" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:border-primary text-sm" oninput="testSandbox()">
                         </div>
                         <div class="flex-1 bg-slate-900 border border-slate-800 rounded-lg p-3 flex flex-col justify-center text-xs space-y-1">
                             <div class="text-slate-400">Match Output:</div>
-                            <div id="sandbox-output" class="text-slate-300 font-mono italic">Type raw statement text to test mapping...</div>
+                            <div id="sandbox-output" class="text-slate-300 font-mono italic">Type raw text or category to test mapping...</div>
                         </div>
                     </div>
                 </div>
@@ -330,20 +395,18 @@
                 <!-- Rules Database Table -->
                 <div class="glass-panel rounded-2xl border border-slate-700 flex flex-col overflow-hidden">
                     <div class="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
-                        <h3 class="font-semibold text-white">Parsing Mappings</h3>
+                        <h3 class="font-semibold text-white">Merchant Renaming & Mapping Rules</h3>
                         <span id="rule-count-badge" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium">0 active rules</span>
                     </div>
                     
                     <!-- Rules Table -->
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm text-slate-300 min-w-[700px]">
+                        <table class="w-full text-left text-sm text-slate-300 min-w-[500px]">
                             <thead class="bg-slate-800 text-slate-400">
                                 <tr>
-                                    <th class="px-4 py-3 font-medium">Trigger Phrase</th>
-                                    <th class="px-4 py-3 font-medium">Mapped Merchant</th>
-                                    <th class="px-4 py-3 font-medium">Category</th>
-                                    <th class="px-4 py-3 font-medium">Linked Card</th>
-                                    <th class="px-4 py-3 font-medium text-center">Cashback Rule</th>
+                                    <th class="px-4 py-3 font-medium">Trigger (Raw Merchant / Category)</th>
+                                    <th class="px-4 py-3 font-medium">Clean Merchant Name</th>
+                                    <th class="px-4 py-3 font-medium">Target Category</th>
                                     <th class="px-4 py-3 font-medium text-center w-24">Actions</th>
                                 </tr>
                             </thead>
@@ -374,15 +437,25 @@
 
                     <div class="space-y-4 pt-2">
                         <h3 class="text-lg font-semibold text-white border-b border-slate-700 pb-2">AI Integration</h3>
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
                             <div>
                                 <label class="block text-sm text-white font-medium">Enable Gemini AI Parsing</label>
-                                <p class="text-xs text-slate-400 max-w-md">Routes extracted text to Google Gemini (via Cloudflare) for highly accurate merchant categorization and data structuring.</p>
+                                <p class="text-xs text-slate-400 max-w-md">Routes extracted text to Google Gemini (via Cloudflare) for highly accurate categorization.</p>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer shrink-0">
                                 <input type="checkbox" id="use-ai-toggle" class="sr-only peer">
                                 <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                             </label>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Gemini AI Model Selection</label>
+                            <select id="ai-model-select" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary">
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommended - Fast & Smart)</option>
+                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Highest Accuracy)</option>
+                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Legacy)</option>
+                            </select>
                         </div>
                     </div>
 
@@ -481,20 +554,26 @@
                     <button type="button" onclick="closeEditModal()" class="flex-1 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors">Cancel</button>
                     <button type="button" onclick="saveEditTransaction()" class="flex-1 py-2 rounded-lg bg-primary text-white hover:bg-secondary transition-colors font-medium">Save</button>
                 </div>
+                <!-- Link with Create Rule button -->
+                <div class="pt-2">
+                    <button type="button" onclick="createRuleFromEdit()" class="w-full py-2 rounded-lg bg-indigo-900/40 text-indigo-300 hover:bg-indigo-900/80 transition-colors border border-indigo-700/50 text-xs flex items-center justify-center gap-2">
+                        <i class="ph ph-magic-wand"></i> Create Automapping Rule for this Merchant
+                    </button>
+                </div>
             </form>
         </div>
     </div>
 
     <!-- Maintenance Rule Builder Modal -->
     <div id="rule-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-md">
+        <div class="glass-panel border border-slate-700 rounded-2xl p-6 w-full max-w-md animate-bounce-in">
             <h3 class="text-lg font-bold text-white mb-4" id="rule-modal-title">Rule Builder Mapping</h3>
             <form id="rule-form" class="space-y-4" onsubmit="saveRule(event)">
                 <input type="hidden" id="rule-id">
                 
                 <div>
-                    <label class="block text-xs text-slate-400 mb-1">Raw Description Trigger Keyword (Contains, case-insensitive)</label>
-                    <input type="text" id="rule-trigger" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary" placeholder="e.g. MUSEE PLATINUM" required>
+                    <label class="block text-xs text-slate-400 mb-1">Trigger Keyword OR Category (e.g. MUSEE or Food & Beverage)</label>
+                    <input type="text" id="rule-trigger" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary" placeholder="Merchant phrase or exact category" required>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-4">
@@ -505,29 +584,8 @@
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">Target Category</label>
                         <select id="rule-category" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary">
-                            <option value="Food & Beverage">Food & Beverage</option>
-                            <option value="Beauty & Wellness">Beauty & Wellness</option>
-                            <option value="Shopping & Retail">Shopping & Retail</option>
-                            <option value="Travel & Transportation">Travel & Transportation</option>
-                            <option value="Utilities & Insurance">Utilities & Insurance</option>
-                            <option value="Uncategorized">Uncategorized</option>
+                            <!-- Populated dynamically -->
                         </select>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs text-slate-400 mb-1">Link to Credit Card</label>
-                        <select id="rule-card" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary">
-                            <option value="Visa Platinum">Visa Platinum</option>
-                            <option value="Mastercard World">Mastercard World</option>
-                            <option value="Maybank 2Gold">Maybank 2Gold</option>
-                            <option value="None">None</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs text-slate-400 mb-1">Cashback % Rate</label>
-                        <input type="number" step="0.1" id="rule-cashback" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:border-primary" placeholder="e.g. 5.0">
                     </div>
                 </div>
 
@@ -546,34 +604,24 @@
         
         let sessionSettings = {
             cfUrl: '',
-            useAI: false
+            useAI: false,
+            aiModel: 'gemini-2.5-flash'
         };
 
-        // Track selected PDF array buffer and name for lock/unlock states
+        // Mutable category state allowing auto-learning from LLM
+        let appCategories = [
+            "Food & Beverage", "Beauty & Wellness", "Shopping & Retail", 
+            "Travel & Transportation", "Utilities & Insurance", "Uncategorized"
+        ];
+
         let selectedFileBuffer = null;
         let selectedFileName = '';
 
-        // Pre-populated default parse-mapping rules
-        let rules = [
-            { id: 1, trigger: 'MUSEE PLATINUM', mappedMerchant: 'Musee Platinum', category: 'Beauty & Wellness', card: 'Visa Platinum', cashbackRate: 5.0 },
-            { id: 2, trigger: 'BOOST JUICE', mappedMerchant: 'Boost Juice', category: 'Food & Beverage', card: 'Mastercard World', cashbackRate: 8.0 },
-            { id: 3, trigger: 'SPECS CITY', mappedMerchant: 'Specs City Optics', category: 'Shopping & Retail', card: 'Visa Platinum', cashbackRate: 3.0 }
-        ];
+        // Empty state arrays
+        let rules = [];
+        let transactions = [];
+        let cashbacks = [];
 
-        // Core Transactions
-        let transactions = [
-            { id: 1, postDate: '22/03', transDate: '22/03', merchant: 'MUSEE PLATINUM TOKYO-E-E6 :005/006', mappedMerchant: 'Musee Platinum', category: 'Beauty & Wellness', details: 'E-E6 :005/006', amount: 133.33 },
-            { id: 2, postDate: '07/04', transDate: '06/04', merchant: 'BOOST JUICE-SUNWAY VELO KUALA LUMPUR MY', mappedMerchant: 'Boost Juice', category: 'Food & Beverage', details: '', amount: 12.90 },
-            { id: 3, postDate: '05/04', transDate: '04/04', merchant: 'SPECS CITY OPTICS K_LUMPUR MY', mappedMerchant: 'Specs City Optics', category: 'Shopping & Retail', details: '', amount: 276.00 }
-        ];
-
-        let cashbacks = [
-            { id: 1, card: 'Visa Platinum', date: '22/03', merchant: 'Musee Platinum', amount: 6.67 },
-            { id: 2, card: 'Mastercard World', date: '07/04', merchant: 'Boost Juice', amount: 1.03 },
-            { id: 3, card: 'Visa Platinum', date: '05/04', merchant: 'Specs City Optics', amount: 8.28 }
-        ];
-
-        // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             // Dropzone logic
             document.getElementById('drop-zone').addEventListener('click', () => {
@@ -586,10 +634,65 @@
 
             document.getElementById('drop-zone').addEventListener('drop', handleDrop, false);
 
+            renderCategories(); 
             renderAll();
         });
 
         function preventDefaults (e) { e.preventDefault(); e.stopPropagation(); }
+
+        // --- Category Management ---
+        function renderCategories() {
+            const chipContainer = document.getElementById('category-chips-container');
+            if(chipContainer) {
+                chipContainer.innerHTML = appCategories.map(cat => 
+                    `<span class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-2 group transition-colors hover:border-slate-500">
+                        ${cat}
+                        ${cat !== 'Uncategorized' ? `<button onclick="deleteCategory('${cat}')" class="text-slate-500 hover:text-red-400 opacity-0 md:opacity-0 group-hover:opacity-100 transition-opacity"><i class="ph ph-x"></i></button>` : ''}
+                    </span>`
+                ).join('');
+                
+                chipContainer.innerHTML += `
+                    <button onclick="promptAddCategory()" class="px-3 py-1.5 rounded-lg text-xs border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-300 transition-colors flex items-center gap-1">
+                        <i class="ph ph-plus"></i> Add New
+                    </button>
+                `;
+            }
+
+            const optionsHtml = appCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+            const editCat = document.getElementById('edit-category');
+            const ruleCat = document.getElementById('rule-category');
+            if(editCat) editCat.innerHTML = optionsHtml;
+            if(ruleCat) ruleCat.innerHTML = optionsHtml;
+        }
+
+        function promptAddCategory() {
+            const newCat = prompt("Enter new category name:");
+            if (newCat && newCat.trim() !== '') {
+                const cleanCat = newCat.trim();
+                if (!appCategories.includes(cleanCat)) {
+                    appCategories.push(cleanCat);
+                    renderCategories();
+                    showMessage(`Category '${cleanCat}' added successfully.`);
+                } else {
+                    showMessage("Category already exists.");
+                }
+            }
+        }
+
+        function deleteCategory(catToRemove) {
+            if(catToRemove === 'Uncategorized') return;
+            if(confirm(`Are you sure you want to delete '${catToRemove}'? Existing transactions will become 'Uncategorized'.`)) {
+                appCategories = appCategories.filter(c => c !== catToRemove);
+                
+                transactions.forEach(t => { if(t.category === catToRemove) t.category = 'Uncategorized'; });
+                rules.forEach(r => { if(r.category === catToRemove) r.category = 'Uncategorized'; });
+                
+                renderCategories();
+                renderAll();
+                if(currentTab === 'analytics') initChart();
+                showMessage(`Category deleted.`);
+            }
+        }
 
         // --- Navigation ---
         function switchTab(tabId) {
@@ -613,13 +716,12 @@
             }
         }
 
-        // --- Sandbox Rule Tester ---
         function testSandbox() {
             const input = document.getElementById('sandbox-input').value.trim();
             const out = document.getElementById('sandbox-output');
             
             if(!input) {
-                out.innerText = "Type raw statement text to test mapping...";
+                out.innerText = "Type raw text or category to test mapping...";
                 out.className = "text-slate-300 font-mono italic";
                 return;
             }
@@ -629,8 +731,7 @@
                 out.innerHTML = `
                     <span class="text-green-400 font-bold">Rule Match Found:</span><br>
                     Mapped: <strong class="text-white">${parsed.mappedMerchant}</strong><br>
-                    Category: <strong class="text-indigo-400">${parsed.category}</strong><br>
-                    Card: <strong class="text-yellow-400">${parsed.card}</strong> (Cashback: ${parsed.cashbackRate}%)
+                    Category: <strong class="text-indigo-400">${parsed.category}</strong>
                 `;
                 out.className = "text-slate-200 font-mono";
             } else {
@@ -639,26 +740,25 @@
             }
         }
 
-        // Apply rules engine logic dynamically to clean descriptions
-        function runRuleEngineOnText(rawDesc) {
+        // Simplified Rule Engine: Only handles Category & Naming overrides
+        function runRuleEngineOnText(rawDesc, explicitCategory = '') {
             const upperText = rawDesc.toUpperCase();
+            const upperCat = explicitCategory.toUpperCase();
+            
             for(let rule of rules) {
-                if(upperText.includes(rule.trigger.toUpperCase())) {
+                const trigger = rule.trigger.toUpperCase();
+                if(upperText.includes(trigger) || (upperCat && upperCat === trigger)) {
                     return {
                         ruleMatched: true,
                         mappedMerchant: rule.mappedMerchant,
-                        category: rule.category,
-                        card: rule.card,
-                        cashbackRate: rule.cashbackRate
+                        category: rule.category
                     };
                 }
             }
             return {
                 ruleMatched: false,
                 mappedMerchant: rawDesc,
-                category: 'Uncategorized',
-                card: 'None',
-                cashbackRate: 0
+                category: explicitCategory || 'Uncategorized'
             };
         }
 
@@ -674,7 +774,6 @@
             if(files.length) initPdfLoad(files[0]);
         }
 
-        // Read PDF file as array buffer completely locally inside the browser
         function initPdfLoad(file) {
             if(file.type !== 'application/pdf') {
                 showMessage("Please upload a valid PDF file.");
@@ -690,7 +789,6 @@
             reader.readAsArrayBuffer(file);
         }
 
-        // Attempt local decryption and load using PDF.js
         function tryUnlockAndLoadPDF(password = '') {
             if (!selectedFileBuffer) return;
 
@@ -703,10 +801,10 @@
             bar.style.width = '20%';
             stepText.innerText = "Opening PDF securely...";
 
-            const loadingTask = pdfjsLib.getDocument({ data: selectedFileBuffer, password: password });
+            const bufferCopy = selectedFileBuffer.slice(0);
+            const loadingTask = pdfjsLib.getDocument({ data: bufferCopy, password: password });
             
             loadingTask.promise.then(async (pdf) => {
-                // PDF unlocked successfully! Proceed with local text extraction
                 bar.style.width = '50%';
                 stepText.innerText = "Extracting statement text...";
                 
@@ -720,12 +818,13 @@
                         const pageText = textContent.items.map(item => item.str).join(' ');
                         extractedText += pageText + '\n';
                         
-                        // Update progress bar scale
                         const subProgress = 50 + Math.round((i / totalPages) * 30);
                         bar.style.width = `${subProgress}%`;
                     }
                     
-                    // Final parsing phase
+                    document.getElementById('raw-text-panel').classList.remove('hidden');
+                    document.getElementById('raw-text-output').value = extractedText;
+
                     bar.style.width = '90%';
                     stepText.innerText = sessionSettings.cfUrl ? "Routing proxy content payload..." : "Parsing matches via Regex...";
                     
@@ -740,7 +839,6 @@
                 }
                 
             }).catch((error) => {
-                // Handle encrypted PDFs
                 statusBox.classList.add('hidden');
                 if (error.name === 'PasswordException' || error.message.includes('password')) {
                     document.getElementById('password-modal').classList.remove('hidden');
@@ -749,6 +847,18 @@
                     showMessage("Failed to load PDF: " + error.message);
                 }
             });
+        }
+
+        function toggleRawTextInspector() {
+            const container = document.getElementById('raw-text-container');
+            const chevron = document.getElementById('raw-text-chevron');
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                chevron.classList.add('rotate-180');
+            } else {
+                container.classList.add('hidden');
+                chevron.classList.remove('rotate-180');
+            }
         }
 
         function cancelUnlock() {
@@ -768,20 +878,22 @@
             tryUnlockAndLoadPDF(pass);
         }
 
-        // Parse extracted PDF text locally or through Cloudflare Proxy
         async function executeTextParsing(rawText) {
             const statusBox = document.getElementById('processing-status');
             const bar = document.getElementById('process-bar');
             
             if (sessionSettings.cfUrl) {
-                // Cloudflare + Gemini integration route
                 try {
                     const response = await fetch(sessionSettings.cfUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            action: 'parse',
                             documentText: rawText,
                             useAI: sessionSettings.useAI,
+                            aiModel: sessionSettings.aiModel,
+                            existingCategories: appCategories, 
+                            allowNewCategories: true, 
                             fileName: selectedFileName
                         })
                     });
@@ -790,12 +902,10 @@
                     const result = await response.json();
                     
                     if (result.transactions && Array.isArray(result.transactions)) {
-                        transactions = result.transactions;
+                        parseSourcedTransactions(JSON.stringify(result.transactions));
                     } else if (result.data) {
-                        // AI output returned structured raw payload, let's parse
                         parseSourcedTransactions(result.data);
                     } else {
-                        // Fallback to local parsing if response data format was simple
                         parseLocalTextRegex(rawText);
                     }
                     
@@ -808,12 +918,10 @@
                     document.getElementById('confidence-score').innerText = "88% (Local Fallback)";
                 }
             } else {
-                // Local parser parsing execution
                 parseLocalTextRegex(rawText);
                 document.getElementById('confidence-score').innerText = "95% (Rule Engine)";
             }
 
-            // Sync visual UI elements
             bar.style.width = '100%';
             setTimeout(() => {
                 statusBox.classList.add('hidden');
@@ -821,90 +929,156 @@
                 document.getElementById('parsed-summary-title').innerText = `Extracted from: ${selectedFileName}`;
                 renderAll();
                 
-                // Switch to statistics immediately
                 setTimeout(() => {
                     switchTab('analytics');
                 }, 1000);
             }, 500);
         }
 
-        // Local Regex transaction parser fallback
         function parseLocalTextRegex(text) {
             const lines = text.split('\n');
             let matchedTransactions = [];
             let matchedCashbacks = [];
             
-            // Standard statement row finder: DD/MM or DD/MM DD/MM followed by alphanumeric merchant details and decimal amounts
-            const rowPattern = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})?\s+([\s\S]+?)\s+(\d+[\.,]\d{2})/g;
+            let detectedCardInfo = "Unknown Card";
+            let bankName = "Unidentified Bank";
             
-            let idCounter = 1;
+            const headerCheck = lines.slice(0, 40).join(' ');
+            const cardMatch = headerCheck.match(/(?:XXXX|xxxx|\*\*\*\*)[-\s]?(\d{4})/);
+            const bankMatch = headerCheck.match(/(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i);
+            
+            if (bankMatch) bankName = bankMatch[1];
+            if (cardMatch) {
+                detectedCardInfo = (bankMatch ? bankMatch[1] + " " : "Card ") + "**** " + cardMatch[1];
+            } else if (bankMatch) {
+                detectedCardInfo = bankMatch[1] + " Account";
+            }
+
+            const insightPanel = document.getElementById('global-doc-insight');
+            const insightLabel = document.getElementById('global-bank-label');
+            if(insightPanel && insightLabel) {
+                insightPanel.classList.remove('hidden');
+                insightLabel.innerHTML = `${bankName} <span class="text-indigo-400 ml-3 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${cardMatch ? '**** ' + cardMatch[1] : 'No Card # Found'}</span>`;
+            }
+
+            const rowPattern = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})?\s+([\s\S]+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2}))/g;
+            let idCounter = Date.now();
             
             lines.forEach(line => {
+                const cleanLine = line.trim();
                 let match;
-                // Run pattern loop on line
-                while ((match = rowPattern.exec(line)) !== null) {
+                rowPattern.lastIndex = 0;
+                
+                while ((match = rowPattern.exec(cleanLine)) !== null) {
                     const postDate = match[1];
                     const transDate = match[2] || postDate;
-                    const rawDesc = match[3].trim();
-                    const rawAmount = match[4].replace(',', '');
+                    const rawDesc = match[3].trim().toUpperCase();
+                    const rawAmount = match[4].replace(/,/g, ''); 
                     const amount = parseFloat(rawAmount);
                     
-                    if (amount > 0) {
-                        // Map rule properties dynamically
+                    if (amount > 0 && rawDesc.length > 2 && !rawDesc.includes('TOTAL') && !rawDesc.includes('SUBTOTAL')) {
                         const ruleMapping = runRuleEngineOnText(rawDesc);
                         
-                        matchedTransactions.push({
-                            id: idCounter,
-                            postDate: postDate,
-                            transDate: transDate,
-                            merchant: rawDesc,
-                            mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawDesc,
-                            category: ruleMapping.category,
-                            details: '',
-                            amount: amount
-                        });
+                        // Purely parse cashback string entries from statement logic
+                        const isCashback = rawDesc.includes("CASH BACK") || rawDesc.includes("CASHBACK") || rawDesc.includes("REBATE") || rawDesc.includes("REWARD");
 
-                        // Map cashback records dynamically
-                        if (ruleMapping.ruleMatched && ruleMapping.cashbackRate > 0) {
-                            const cbAmount = parseFloat(((amount * ruleMapping.cashbackRate) / 100).toFixed(2));
+                        if (isCashback) {
                             matchedCashbacks.push({
                                 id: idCounter,
-                                card: ruleMapping.card,
+                                card: detectedCardInfo,
                                 date: postDate,
-                                merchant: ruleMapping.mappedMerchant,
-                                amount: cbAmount
+                                merchant: rawDesc, // Keep raw string for cashback hub list
+                                amount: amount
+                            });
+                        } else {
+                            matchedTransactions.push({
+                                id: idCounter,
+                                postDate: postDate,
+                                transDate: transDate,
+                                cardInfo: detectedCardInfo,
+                                merchant: rawDesc,
+                                mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawDesc,
+                                category: ruleMapping.category,
+                                details: '',
+                                amount: amount
                             });
                         }
-                        
                         idCounter++;
                     }
                 }
             });
 
-            // If we extracted valid transactions, replace mock datasets completely!
-            if (matchedTransactions.length > 0) {
-                transactions = matchedTransactions;
-                cashbacks = matchedCashbacks;
+            if (matchedTransactions.length > 0 || matchedCashbacks.length > 0) {
+                transactions = [...transactions, ...matchedTransactions];
+                cashbacks = [...cashbacks, ...matchedCashbacks];
+                showMessage(`Parsed ${matchedTransactions.length} transactions and ${matchedCashbacks.length} actual statement cashbacks.`);
             } else {
-                showMessage("No transactional rows detected. Showing default data playground.");
+                showMessage("No transactional rows detected. Please check the 'Raw Text Inspector' below to diagnose column layout.");
             }
         }
 
-        // Fallback parsers for custom structured JSON AI schemas
         function parseSourcedTransactions(aiString) {
             try {
                 const cleanJson = JSON.parse(aiString);
                 if (Array.isArray(cleanJson)) {
-                    transactions = cleanJson.map((t, idx) => ({
-                        id: idx + 1,
-                        postDate: t.postDate || 'Today',
-                        transDate: t.transDate || 'Today',
-                        merchant: t.merchant || 'Generic',
-                        mappedMerchant: t.mappedMerchant || t.merchant,
-                        category: t.category || 'Uncategorized',
-                        details: t.details || '',
-                        amount: parseFloat(t.amount) || 0.00
-                    }));
+                    
+                    let learnedNew = false;
+                    cleanJson.forEach(t => {
+                        if (t.category && !appCategories.includes(t.category) && t.category !== 'Uncategorized') {
+                            appCategories.push(t.category);
+                            learnedNew = true;
+                        }
+                    });
+                    if(learnedNew) {
+                        renderCategories();
+                        showMessage("LLM identified and created new category tags!");
+                    }
+
+                    const detectedCard = cleanJson[0]?.cardInfo || "AI Detected Document";
+                    const insightPanel = document.getElementById('global-doc-insight');
+                    const insightLabel = document.getElementById('global-bank-label');
+                    if(insightPanel && insightLabel) {
+                        insightPanel.classList.remove('hidden');
+                        insightLabel.innerHTML = `${detectedCard} <span class="text-emerald-400 ml-3 text-xs border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-900/30"><i class="ph ph-sparkle"></i> AI Structured</span>`;
+                    }
+
+                    const parsedTx = [];
+                    let localCbId = Date.now() + 9000;
+
+                    cleanJson.forEach((t, idx) => {
+                        const rawMerc = t.merchant || 'Generic';
+                        const aiCat = t.category || 'Uncategorized';
+                        const amt = parseFloat(t.amount) || 0.00;
+
+                        let matchedRule = rules.find(r => rawMerc.toUpperCase().includes(r.trigger.toUpperCase()) || r.trigger.toUpperCase() === aiCat.toUpperCase());
+
+                        // If AI extracts it as a cashback/rebate entry, send to Cashback Hub
+                        const isCashback = rawMerc.toUpperCase().includes("CASH BACK") || rawMerc.toUpperCase().includes("CASHBACK") || rawMerc.toUpperCase().includes("REBATE") || aiCat.toUpperCase().includes("CASHBACK");
+
+                        if (isCashback) {
+                            cashbacks.push({
+                                id: localCbId++,
+                                card: detectedCard,
+                                date: t.postDate || 'Today',
+                                merchant: rawMerc,
+                                amount: amt
+                            });
+                        } else {
+                            parsedTx.push({
+                                id: Date.now() + idx,
+                                postDate: t.postDate || 'Today',
+                                transDate: t.transDate || 'Today',
+                                cardInfo: detectedCard,
+                                merchant: rawMerc,
+                                mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
+                                category: (matchedRule ? matchedRule.category : aiCat),
+                                details: t.details || '',
+                                amount: amt
+                            });
+                        }
+                    });
+
+                    transactions = [...transactions, ...parsedTx];
                 }
             } catch(e) {
                 parseLocalTextRegex(aiString);
@@ -913,22 +1087,15 @@
 
         function reparseExistingWithRules() {
             transactions.forEach(t => {
-                const mapRes = runRuleEngineOnText(t.merchant);
+                const mapRes = runRuleEngineOnText(t.merchant, t.category); 
                 if(mapRes.ruleMatched) {
                     t.mappedMerchant = mapRes.mappedMerchant;
                     t.category = mapRes.category;
-                    
-                    // Auto recalculate cashback logs
-                    const existingCb = cashbacks.find(cb => cb.merchant === t.mappedMerchant);
-                    if(existingCb && mapRes.cashbackRate > 0) {
-                        existingCb.amount = parseFloat(((t.amount * mapRes.cashbackRate) / 100).toFixed(2));
-                        existingCb.card = mapRes.card;
-                    }
                 }
             });
         }
 
-        // --- Rule Editor Modal Actions ---
+        // --- Rule & Modals ---
         function openRuleModal(id) {
             const form = document.getElementById('rule-form');
             form.reset();
@@ -941,8 +1108,6 @@
                     document.getElementById('rule-trigger').value = rule.trigger;
                     document.getElementById('rule-mapped-merchant').value = rule.mappedMerchant;
                     document.getElementById('rule-category').value = rule.category;
-                    document.getElementById('rule-card').value = rule.card;
-                    document.getElementById('rule-cashback').value = rule.cashbackRate;
                 }
             } else {
                 document.getElementById('rule-modal-title').innerText = "Add Parsing Rule";
@@ -961,9 +1126,7 @@
             const newRule = {
                 trigger: document.getElementById('rule-trigger').value.trim(),
                 mappedMerchant: document.getElementById('rule-mapped-merchant').value.trim(),
-                category: document.getElementById('rule-category').value,
-                card: document.getElementById('rule-card').value,
-                cashbackRate: parseFloat(document.getElementById('rule-cashback').value) || 0.0
+                category: document.getElementById('rule-category').value
             };
 
             if (id) {
@@ -987,7 +1150,6 @@
         function deleteRule(id) {
             rules = rules.filter(r => r.id !== id);
             showMessage("Rule deleted.");
-            reparseExistingWithRules();
             renderAll();
         }
 
@@ -996,205 +1158,7 @@
             openRuleModal(null);
         }
 
-        // --- Render Engine ---
-        function renderAll() {
-            renderConsoleTable();
-            renderMasterTransactions();
-            renderAnalyticsCards();
-            renderCashback();
-            renderRulesTable();
-        }
-
-        function renderConsoleTable() {
-            const tbody = document.getElementById('extracted-table-body');
-            tbody.innerHTML = '';
-            transactions.forEach(t => {
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50 transition-colors">
-                        <td class="px-4 py-3 whitespace-nowrap">${t.postDate}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">${t.transDate}</td>
-                        <td class="px-4 py-3">
-                            <div class="font-medium text-white">${t.mappedMerchant || t.merchant}</div>
-                            <div class="flex gap-2 items-center mt-1">
-                                <span class="text-xs text-slate-500 truncate max-w-xs">${t.merchant}</span>
-                                <span class="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded">${t.category}</span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
-                        <td class="px-4 py-3 text-center">
-                            <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function renderMasterTransactions(filterText = '') {
-            const desktopBody = document.getElementById('master-table-body');
-            const mobileList = document.getElementById('master-mobile-list');
-            desktopBody.innerHTML = '';
-            mobileList.innerHTML = '';
-
-            const filtered = transactions.filter(t => {
-                const term = filterText.toLowerCase();
-                return t.merchant.toLowerCase().includes(term) || 
-                       (t.mappedMerchant && t.mappedMerchant.toLowerCase().includes(term)) ||
-                       t.category.toLowerCase().includes(term) ||
-                       t.amount.toString().includes(term) ||
-                       t.postDate.includes(term);
-            });
-
-            if(filtered.length === 0) {
-                const emptyHTML = `<div class="p-8 text-center text-slate-500 text-sm">No transactions matched your query.</div>`;
-                desktopBody.innerHTML = `<tr><td colspan="5">${emptyHTML}</td></tr>`;
-                mobileList.innerHTML = emptyHTML;
-                return;
-            }
-
-            filtered.forEach(t => {
-                desktopBody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50 transition-colors">
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-400">
-                            <div>${t.postDate}</div>
-                            <div class="text-[10px]">T: ${t.transDate}</div>
-                        </td>
-                        <td class="px-4 py-3 font-medium text-white">${t.mappedMerchant || t.merchant}</td>
-                        <td class="px-4 py-3">
-                            <span class="text-[11px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-indigo-300">${t.category}</span>
-                            ${t.details ? `<div class="text-xs text-slate-500 mt-1">${t.details}</div>` : ''}
-                        </td>
-                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
-                        <td class="px-4 py-3 text-center">
-                            <div class="flex items-center justify-center gap-1.5">
-                                <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
-                                <button onclick="deleteTransaction(${t.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"><i class="ph ph-trash"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-
-                mobileList.innerHTML += `
-                    <div class="p-4 hover:bg-slate-800/30 transition-colors">
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="font-medium text-white leading-tight pr-4">${t.mappedMerchant || t.merchant}</div>
-                            <div class="font-bold text-white whitespace-nowrap">RM ${t.amount.toFixed(2)}</div>
-                        </div>
-                        <div class="flex justify-between items-end">
-                            <div class="space-y-1">
-                                <div class="text-xs text-slate-400">${t.postDate} ${t.details ? `• ${t.details}` : ''}</div>
-                                <span class="inline-block text-[10px] bg-slate-850 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">${t.category}</span>
-                            </div>
-                            <div class="flex gap-2">
-                                <button onclick="openEditModal(${t.id})" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        function renderAnalyticsCards() {
-            const total = transactions.reduce((sum, t) => sum + t.amount, 0);
-            document.getElementById('stat-total').innerText = total.toFixed(2);
-            document.getElementById('stat-count').innerText = transactions.length;
-
-            if(transactions.length > 0) {
-                const highest = transactions.reduce((prev, current) => (prev.amount > current.amount) ? prev : current);
-                document.getElementById('stat-high').innerText = highest.mappedMerchant || highest.merchant;
-            } else {
-                document.getElementById('stat-high').innerText = "--";
-            }
-        }
-
-        function renderCashback() {
-            const container = document.getElementById('cashback-cards-container');
-            const list = document.getElementById('cashback-history-list');
-            container.innerHTML = '';
-            list.innerHTML = '';
-
-            const grouped = {};
-            cashbacks.forEach(c => {
-                if(!grouped[c.card]) grouped[c.card] = 0;
-                grouped[c.card] += c.amount;
-            });
-
-            for (const [card, amount] of Object.entries(grouped)) {
-                if(card === "None") continue;
-                container.innerHTML += `
-                    <div class="glass-panel p-5 rounded-2xl border border-slate-700 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                        <div class="relative z-10">
-                            <div class="flex items-center gap-2 mb-2 text-slate-400">
-                                <i class="ph ph-credit-card text-xl"></i>
-                                <span class="text-sm font-medium">${card}</span>
-                            </div>
-                            <div class="text-3xl font-bold text-white">RM ${amount.toFixed(2)}</div>
-                            <div class="mt-4 w-full bg-slate-800 rounded-full h-1.5">
-                                <div class="bg-green-400 h-1.5 rounded-full" style="width: ${Math.min((amount/50)*100, 100)}%"></div>
-                            </div>
-                            <div class="text-xs text-slate-500 mt-2 text-right">Progress towards monthly cap limit</div>
-                        </div>
-                    </div>
-                `;
-            }
-
-            cashbacks.forEach(c => {
-                list.innerHTML += `
-                    <li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors">
-                        <div>
-                            <div class="font-medium text-white">${c.merchant}</div>
-                            <div class="text-xs text-slate-400">${c.date} • ${c.card}</div>
-                        </div>
-                        <div class="font-bold text-green-400">+ RM ${c.amount.toFixed(2)}</div>
-                    </li>
-                `;
-            });
-        }
-
-        function renderRulesTable() {
-            const tbody = document.getElementById('rules-table-body');
-            const countBadge = document.getElementById('rule-count-badge');
-            tbody.innerHTML = '';
-            countBadge.innerText = `${rules.length} Active Rules`;
-
-            if(rules.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-500">No custom parsing rules found. Click 'Add Rule' to create one!</td></tr>`;
-                return;
-            }
-
-            rules.forEach(rule => {
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50 transition-colors">
-                        <td class="px-4 py-3 font-mono text-slate-300 font-semibold text-xs select-all bg-slate-900/40">${rule.trigger}</td>
-                        <td class="px-4 py-3 font-medium text-white">${rule.mappedMerchant}</td>
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">${rule.category}</span>
-                        </td>
-                        <td class="px-4 py-3 text-slate-400 text-xs">${rule.card}</td>
-                        <td class="px-4 py-3 text-center">
-                            <span class="text-xs font-semibold px-2 py-0.5 rounded ${rule.cashbackRate > 0 ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-800 text-slate-400'}">${rule.cashbackRate > 0 ? `${rule.cashbackRate}%` : 'N/A'}</span>
-                        </td>
-                        <td class="px-4 py-3 text-center">
-                            <div class="flex items-center justify-center gap-1">
-                                <button onclick="openRuleModal(${rule.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>
-                                <button onclick="deleteRule(${rule.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        // --- Data Interaction & Logic ---
-        function filterTransactions() {
-            const term = document.getElementById('search-input').value;
-            renderMasterTransactions(term);
-        }
-
-        function addManualTransaction() {
-            openEditModal(null);
-        }
-
+        // --- Trans Edit & Link to Rule ---
         function openEditModal(id) {
             const modal = document.getElementById('edit-modal');
             const form = document.getElementById('edit-form');
@@ -1231,16 +1195,15 @@
         function saveEditTransaction() {
             const id = document.getElementById('edit-id').value;
             const rawMerc = document.getElementById('edit-merchant').value;
-            
-            // Run rules to auto clean friendly merchant mapping unless manually set
-            const ruleMapping = runRuleEngineOnText(rawMerc);
+            const catOverride = document.getElementById('edit-category').value;
+            const ruleMapping = runRuleEngineOnText(rawMerc, catOverride);
 
             const t = {
                 postDate: document.getElementById('edit-post').value,
                 transDate: document.getElementById('edit-trans').value,
                 merchant: rawMerc,
                 mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawMerc,
-                category: document.getElementById('edit-category').value,
+                category: catOverride,
                 details: document.getElementById('edit-details').value,
                 amount: parseFloat(document.getElementById('edit-amount').value) || 0
             };
@@ -1252,6 +1215,7 @@
                 }
             } else {
                 t.id = Date.now();
+                t.cardInfo = "Manual Entry";
                 transactions.push(t);
             }
 
@@ -1266,27 +1230,242 @@
             if(currentTab === 'analytics') initChart();
         }
 
+        function createRuleFromEdit() {
+            const rawMerc = document.getElementById('edit-merchant').value;
+            if(!rawMerc) {
+                showMessage("Please enter a raw description first.");
+                return;
+            }
+            closeEditModal();
+            switchTab('maintenance');
+            openRuleModal(null);
+            document.getElementById('rule-trigger').value = rawMerc;
+            document.getElementById('rule-mapped-merchant').value = rawMerc;
+        }
+
         function addManualCashback() {
-            const amount = parseFloat(prompt("Enter cashback amount (RM):", "5.00"));
+            const amount = parseFloat(prompt("Enter cashback amount (RM):", "0.00"));
             if(!amount) return;
-            const merchant = prompt("Enter source/merchant:", "Bonus Reward");
+            const bankCard = prompt("Enter Bank / Card Name (for grouping):", "Manual Entry Card");
+            const merchant = prompt("Enter Description:", "Bonus Reward");
             
             cashbacks.push({
                 id: Date.now(),
-                card: 'Manual Entry',
-                date: 'Today',
+                card: bankCard || 'Manual Entry',
+                date: new Date().toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit'}),
                 merchant: merchant || 'Generic Card Promo',
                 amount: amount
             });
             renderCashback();
         }
 
+        // --- Render Engine ---
+        function renderAll() {
+            renderConsoleTable();
+            renderMasterTransactions();
+            renderAnalyticsCards();
+            renderCashback();
+            renderRulesTable();
+        }
+
+        function renderConsoleTable() {
+            const tbody = document.getElementById('extracted-table-body');
+            tbody.innerHTML = '';
+            
+            if (transactions.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-500 text-sm">No transactions parsed yet. Upload a statement to get started!</td></tr>`;
+                return;
+            }
+
+            transactions.forEach(t => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-white">${t.postDate}</div>
+                            <div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">${t.cardInfo || 'Unknown'}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">${t.transDate}</td>
+                        <td class="px-4 py-3">
+                            <div class="font-medium text-white">${t.mappedMerchant || t.merchant}</div>
+                            <div class="flex gap-2 items-center mt-1">
+                                <span class="text-xs text-slate-500 truncate max-w-xs">${t.merchant}</span>
+                                <span class="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded">${t.category}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderMasterTransactions(filterText = '') {
+            const desktopBody = document.getElementById('master-table-body');
+            const mobileList = document.getElementById('master-mobile-list');
+            desktopBody.innerHTML = '';
+            mobileList.innerHTML = '';
+
+            const filtered = transactions.filter(t => {
+                const term = filterText.toLowerCase();
+                return t.merchant.toLowerCase().includes(term) || 
+                       (t.mappedMerchant && t.mappedMerchant.toLowerCase().includes(term)) ||
+                       t.category.toLowerCase().includes(term) ||
+                       t.amount.toString().includes(term) ||
+                       t.postDate.includes(term);
+            });
+
+            if(filtered.length === 0) {
+                const emptyHTML = `<div class="p-8 text-center text-slate-500 text-sm">No transactions matched.</div>`;
+                desktopBody.innerHTML = `<tr><td colspan="5">${emptyHTML}</td></tr>`;
+                mobileList.innerHTML = emptyHTML;
+                return;
+            }
+
+            filtered.forEach(t => {
+                desktopBody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 whitespace-nowrap text-slate-400">
+                            <div>${t.postDate}</div>
+                            <div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">${t.cardInfo || 'Unknown'}</div>
+                        </td>
+                        <td class="px-4 py-3 font-medium text-white">${t.mappedMerchant || t.merchant}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-indigo-300">${t.category}</span>
+                            ${t.details ? `<div class="text-xs text-slate-500 mt-1">${t.details}</div>` : ''}
+                        </td>
+                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
+                                <button onclick="deleteTransaction(${t.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"><i class="ph ph-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+
+                mobileList.innerHTML += `
+                    <div class="p-4 hover:bg-slate-800/30 transition-colors">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="font-medium text-white leading-tight pr-4">${t.mappedMerchant || t.merchant}</div>
+                            <div class="font-bold text-white whitespace-nowrap">RM ${t.amount.toFixed(2)}</div>
+                        </div>
+                        <div class="flex justify-between items-end">
+                            <div class="space-y-1">
+                                <div class="text-xs text-slate-400">${t.postDate} <span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1">${t.cardInfo}</span></div>
+                                <span class="inline-block text-[10px] bg-slate-850 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">${t.category}</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="openEditModal(${t.id})" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function renderAnalyticsCards() {
+            const total = transactions.reduce((sum, t) => sum + t.amount, 0);
+            document.getElementById('stat-total').innerText = total.toFixed(2);
+            document.getElementById('stat-count').innerText = transactions.length;
+
+            if(transactions.length > 0) {
+                const highest = transactions.reduce((prev, current) => (prev.amount > current.amount) ? prev : current);
+                document.getElementById('stat-high').innerText = highest.mappedMerchant || highest.merchant;
+            } else {
+                document.getElementById('stat-high').innerText = "--";
+            }
+        }
+
+        // --- DASHBOARD: Simple Sum & Reflect Math ---
+        function renderCashback() {
+            const container = document.getElementById('cashback-cards-container');
+            const list = document.getElementById('cashback-history-list');
+            const totalDisplay = document.getElementById('cashback-total-amount');
+            
+            container.innerHTML = '';
+            list.innerHTML = '';
+
+            const grouped = {};
+            let totalCashbackSum = 0;
+            
+            cashbacks.forEach(c => {
+                const mapCard = c.card || "Unknown Statement";
+                if(!grouped[mapCard]) grouped[mapCard] = 0;
+                grouped[mapCard] += c.amount;
+                totalCashbackSum += c.amount;
+            });
+
+            // Set main dashboard total
+            if(totalDisplay) totalDisplay.innerText = totalCashbackSum.toFixed(2);
+
+            for (const [card, amount] of Object.entries(grouped)) {
+                container.innerHTML += `
+                    <div class="glass-panel p-4 rounded-2xl border border-slate-700 relative flex flex-col justify-between hover:border-slate-500 transition-colors">
+                        <div class="flex items-center gap-2 mb-3 text-slate-400">
+                            <i class="ph ph-bank text-lg"></i>
+                            <span class="text-sm font-medium truncate">${card}</span>
+                        </div>
+                        <div class="text-2xl font-bold text-emerald-400">RM ${amount.toFixed(2)}</div>
+                    </div>
+                `;
+            }
+
+            if(cashbacks.length === 0) {
+                 list.innerHTML = `<li class="p-4 text-center text-sm text-slate-500">No cashback entries found from statements or manual entry.</li>`;
+            }
+
+            // Display in list format with most recent items effectively stacking
+            [...cashbacks].reverse().forEach(c => {
+                list.innerHTML += `
+                    <li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors">
+                        <div>
+                            <div class="font-medium text-white">${c.merchant}</div>
+                            <div class="text-xs text-slate-400">${c.date} • ${c.card}</div>
+                        </div>
+                        <div class="font-bold text-emerald-400">+ RM ${c.amount.toFixed(2)}</div>
+                    </li>
+                `;
+            });
+        }
+
+        function renderRulesTable() {
+            const tbody = document.getElementById('rules-table-body');
+            const countBadge = document.getElementById('rule-count-badge');
+            tbody.innerHTML = '';
+            countBadge.innerText = `${rules.length} Active Rules`;
+
+            if(rules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">No custom parsing rules found. Click 'Add Rule' to create one!</td></tr>`;
+                return;
+            }
+
+            rules.forEach(rule => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 font-mono text-slate-300 font-semibold text-xs select-all bg-slate-900/40">${rule.trigger}</td>
+                        <td class="px-4 py-3 font-medium text-white">${rule.mappedMerchant}</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">${rule.category}</span>
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="openRuleModal(${rule.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>
+                                <button onclick="deleteRule(${rule.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
         function exportData() {
             if(transactions.length === 0) return;
             
-            let csv = 'Post Date,Trans Date,Merchant,Mapped Merchant,Category,Details,Amount (RM)\n';
+            let csv = 'Post Date,Trans Date,Card,Merchant,Mapped Merchant,Category,Details,Amount (RM)\n';
             transactions.forEach(t => {
-                csv += `"${t.postDate}","${t.transDate}","${t.merchant}","${t.mappedMerchant || t.merchant}","${t.category}","${t.details}",${t.amount}\n`;
+                csv += `"${t.postDate}","${t.transDate}","${t.cardInfo || ''}","${t.merchant}","${t.mappedMerchant || t.merchant}","${t.category}","${t.details}",${t.amount}\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -1304,31 +1483,86 @@
             e.preventDefault();
             sessionSettings.cfUrl = document.getElementById('cf-url').value;
             sessionSettings.useAI = document.getElementById('use-ai-toggle').checked;
+            sessionSettings.aiModel = document.getElementById('ai-model-select').value;
             
             let msg = "Proxy Endpoint saved to session memory.";
-            if (sessionSettings.useAI) msg += " AI Parse Rules are live.";
+            if (sessionSettings.useAI) msg += ` AI Model (${sessionSettings.aiModel}) is live.`;
             
             showMessage(msg);
         }
 
-        function manualSync() {
-            const btn = event.currentTarget;
-            const icon = btn.querySelector('i');
-            if(icon) icon.classList.add('animate-spin');
-            
-            setTimeout(() => {
-                if(icon) icon.classList.remove('animate-spin');
-                document.getElementById('sync-status-desk').innerText = "Just now";
-                const dot = document.getElementById('sync-dot');
-                if(dot) {
-                    dot.classList.remove('hidden');
-                    setTimeout(() => dot.classList.add('hidden'), 3000);
+        // --- Hybrid Local/Cloud Sync ---
+        async function cloudSyncAction(actionType) {
+            if(!sessionSettings.cfUrl) {
+                if (actionType === 'sync') {
+                    const backupData = { transactions, cashbacks, rules, appCategories };
+                    localStorage.setItem('zero_cost_backup', JSON.stringify(backupData));
+                    document.getElementById('sync-status-desk').innerText = "Just now (Local)";
+                    showMessage("Saved to local browser storage. Add Cloudflare URL in Setup for Cloud Sync.");
+                } else if (actionType === 'load') {
+                    const localData = localStorage.getItem('zero_cost_backup');
+                    if(localData) {
+                        try {
+                            const backup = JSON.parse(localData);
+                            transactions = backup.transactions || [];
+                            cashbacks = backup.cashbacks || [];
+                            rules = backup.rules || [];
+                            if (backup.appCategories) appCategories = backup.appCategories;
+                            renderCategories();
+                            renderAll();
+                            if(chartInstance) initChart();
+                            document.getElementById('sync-status-desk').innerText = "Just now (Local)";
+                            showMessage("Loaded from local browser storage.");
+                        } catch (e) {
+                            showMessage("Error reading local backup data.");
+                        }
+                    } else {
+                        showMessage("No local backup found.");
+                    }
                 }
-                showMessage("Cloudflare Rule Engine synced successfully.");
-            }, 1000);
+                return;
+            }
+
+            showMessage(`Initiating cloud ${actionType}...`);
+            
+            try {
+                const response = await fetch(sessionSettings.cfUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: actionType, 
+                        transactions: transactions,
+                        cashbacks: cashbacks,
+                        rules: rules,
+                        appCategories: appCategories
+                    })
+                });
+
+                if(!response.ok) throw new Error(`Cloud ${actionType} proxy failed.`);
+                const data = await response.json();
+                
+                if (actionType === 'load' && data.backup) {
+                    transactions = data.backup.transactions || [];
+                    cashbacks = data.backup.cashbacks || [];
+                    rules = data.backup.rules || [];
+                    if (data.backup.appCategories) appCategories = data.backup.appCategories;
+                    renderCategories();
+                    renderAll();
+                    if(chartInstance) initChart();
+                    showMessage("Data successfully loaded from Cloud!");
+                } else if (actionType === 'sync') {
+                     showMessage("Data securely backed up to Cloud!");
+                }
+                
+                const desksync = document.getElementById('sync-status-desk');
+                if(desksync) desksync.innerText = "Just now (Cloud)";
+
+            } catch (err) {
+                showMessage(`Cloud ${actionType} Error: ` + err.message);
+            }
         }
 
-        // --- Categories Chart (Upgraded to dynamic rule category summaries) ---
+        // --- Interactive Interactive Chart Filtering ---
         function initChart() {
             const ctx = document.getElementById('spendingChart');
             if(!ctx) return;
@@ -1337,7 +1571,6 @@
                 chartInstance.destroy();
             }
 
-            // Aggregate spending dynamically by mapped Categories
             const groupData = {};
             transactions.forEach(t => {
                 const cat = t.category || "Uncategorized";
@@ -1350,6 +1583,11 @@
             Chart.defaults.color = '#94a3b8';
             Chart.defaults.font.family = 'Inter';
 
+            if (labels.length === 0) {
+                labels.push("No Data Available");
+                data.push(0);
+            }
+
             chartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
@@ -1357,12 +1595,7 @@
                     datasets: [{
                         data: data,
                         backgroundColor: [
-                            '#6366f1', // primary Indigo
-                            '#ec4899', // pink Pink
-                            '#10b981', // green Emerald
-                            '#f59e0b', // orange Amber
-                            '#8b5cf6', // purple Violet
-                            '#64748b'  // slate Grey
+                            '#6366f1', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#64748b'
                         ],
                         borderWidth: 2,
                         borderColor: '#1e293b'
@@ -1371,13 +1604,28 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    // Interactive Chart UI features
+                    onHover: (event, chartElement) => {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const category = chartInstance.data.labels[index];
+                            if(category !== "No Data Available") {
+                                document.getElementById('search-input').value = category;
+                                filterTransactions();
+                            }
+                        } else {
+                            // Clicked center/outside, reset filter
+                            document.getElementById('search-input').value = '';
+                            filterTransactions();
+                        }
+                    },
                     plugins: {
                         legend: { 
                             position: 'bottom',
-                            labels: {
-                                boxWidth: 12,
-                                padding: 16
-                            }
+                            labels: { boxWidth: 12, padding: 16 }
                         }
                     },
                     cutout: '65%'
