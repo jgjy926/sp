@@ -331,29 +331,41 @@
     <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
   </div>
 
-  <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
-    <select
-      id="analytics-year-filter"
-      onchange="onPeriodFilterChanged('analytics')"
-      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
-    >
-      <option value="all">All Years</option>
-    </select>
-
-    <select
-      id="analytics-month-filter"
-      onchange="onPeriodFilterChanged('analytics')"
-      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
-    >
-      <option value="all">All Months</option>
-    </select>
-
-    <button
-      onclick="resetPeriodFilter()"
-      class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
-    >
-      Reset
-    </button>
+  <div class="flex flex-col sm:flex-row gap-2">
+    <!-- Date mode toggle -->
+    <div class="glass-panel border border-slate-700 rounded-2xl p-1.5 flex gap-1">
+      <button id="date-mode-post-btn" onclick="setDateMode('post')"
+        class="px-3 py-1.5 rounded-xl text-xs font-medium transition-all bg-primary text-white">
+        Post Date
+      </button>
+      <button id="date-mode-trans-btn" onclick="setDateMode('trans')"
+        class="px-3 py-1.5 rounded-xl text-xs font-medium transition-all text-slate-400 hover:text-white">
+        Trans Date
+      </button>
+    </div>
+    <!-- Year / Month filters -->
+    <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
+      <select
+        id="analytics-year-filter"
+        onchange="onPeriodFilterChanged('analytics')"
+        class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+      >
+        <option value="all">All Years</option>
+      </select>
+      <select
+        id="analytics-month-filter"
+        onchange="onPeriodFilterChanged('analytics')"
+        class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+      >
+        <option value="all">All Months</option>
+      </select>
+      <button
+        onclick="resetPeriodFilter()"
+        class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
+      >
+        Reset
+      </button>
+    </div>
   </div>
 </div>
 
@@ -424,7 +436,7 @@
     <p class="text-slate-400 text-sm">Total savings extracted directly from statements and manual entries.</p>
   </div>
 
-  <div class="flex flex-col sm:flex-row gap-2">
+  <div class="flex flex-col sm:flex-row gap-2 flex-wrap">
     <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
       <select
         id="cashback-year-filter"
@@ -433,7 +445,6 @@
       >
         <option value="all">All Years</option>
       </select>
-
       <select
         id="cashback-month-filter"
         onchange="onPeriodFilterChanged('cashback')"
@@ -441,7 +452,6 @@
       >
         <option value="all">All Months</option>
       </select>
-
       <button
         onclick="resetPeriodFilter()"
         class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
@@ -449,7 +459,6 @@
         Reset
       </button>
     </div>
-
     <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600 flex items-center justify-center gap-2" onclick="addManualCashback()">
       <i class="ph ph-plus"></i> Add Entry
     </button>
@@ -468,8 +477,14 @@
                 </div>
                 
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
-                    <div class="p-4 border-b border-slate-700 bg-slate-800/50">
-                        <h3 class="font-semibold text-white">Extracted Cashback Entries</h3>
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/50 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                        <h3 class="font-semibold text-white w-full sm:w-auto">Cashback Entries</h3>
+                        <div class="relative w-full sm:w-64">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="cashback-search-input" placeholder="Search entries..."
+                              class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:border-primary transition-colors"
+                              oninput="renderCashback()">
+                        </div>
                     </div>
                     <div class="p-0">
                         <ul id="cashback-history-list" class="divide-y divide-slate-700/50 max-h-96 overflow-y-auto no-scrollbar">
@@ -710,6 +725,70 @@
         </div>
     </div>
 
+
+    <!-- Cashback Entry Modal -->
+    <div id="cashback-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+      <div class="glass-panel border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 bg-emerald-950/40 border-b border-emerald-800/30">
+          <div class="flex items-center gap-2">
+            <i class="ph ph-coins text-emerald-400 text-xl"></i>
+            <h3 class="text-lg font-bold text-white" id="cashback-modal-title">Add Cashback Entry</h3>
+          </div>
+          <button onclick="closeCashbackModal()" class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all">
+            <i class="ph ph-x"></i>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4">
+          <input type="hidden" id="cb-edit-id">
+
+          <!-- Date -->
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5 font-medium">Date</label>
+            <input type="date" id="cb-date"
+              class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors [color-scheme:dark]">
+          </div>
+
+          <!-- Card / Bank -->
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5 font-medium">Card / Bank</label>
+            <div class="relative">
+              <input type="text" id="cb-card" placeholder="e.g. Maybank AMEX **** 1234"
+                class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors">
+            </div>
+            <!-- Quick-fill from known cards -->
+            <div id="cb-card-chips" class="flex flex-wrap gap-1.5 mt-2"></div>
+          </div>
+
+          <!-- Description -->
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5 font-medium">Description</label>
+            <input type="text" id="cb-merchant" placeholder="e.g. Monthly Cash Rebate"
+              class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors">
+          </div>
+
+          <!-- Amount -->
+          <div>
+            <label class="block text-xs text-slate-400 mb-1.5 font-medium">Amount (RM)</label>
+            <div class="relative">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">RM</span>
+              <input type="number" step="0.01" min="0" id="cb-amount" placeholder="0.00"
+                class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 transition-colors">
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex gap-3 pt-2">
+            <button onclick="closeCashbackModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 text-white hover:bg-slate-700 transition-colors text-sm">Cancel</button>
+            <button onclick="saveCashbackEntry()" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium text-sm flex items-center justify-center gap-2">
+              <i class="ph ph-check"></i> Save Entry
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
    <script>
 /**
  * Zero-Cost Statement Parser - Rescue / Replacement Runtime
@@ -728,6 +807,7 @@
 
     var selectedYear = 'all';
     var selectedMonth = 'all';
+    var selectedDateMode = 'post'; // 'post' = posting date, 'trans' = transaction date
 
   var sessionSettings = {
     cfUrl: '',
@@ -812,17 +892,32 @@ function inferTransactionYear(tx) {
     if (fullDateMatch) return fullDateMatch[1];
   }
 
+  // Check stored date fields (cashback stores DD/MM/YYYY)
+  var dateStr = String(tx.date || tx.postDate || tx.transDate || '');
+  var yearInDate = dateStr.match(/\b(20\d{2}|19\d{2})\b/);
+  if (yearInDate) return yearInDate[1];
+
   return getStatementYearFallback();
 }
 
 function inferTransactionMonth(tx) {
-  const d = String(tx.postDate || tx.date || '');
+  // Pick the date field based on selectedDateMode
+  var raw;
+  if (selectedDateMode === 'trans' && tx.transDate) {
+    raw = String(tx.transDate);
+  } else {
+    raw = String(tx.postDate || tx.date || '');
+  }
 
-  const match = d.match(/^(\d{2})\/(\d{2})/);
-
+  const match = raw.match(/^(\d{2})\/(\d{2})/);
   if (!match) return 'unknown';
+  return match[2]; // month is group 2 in DD/MM format
+}
 
-  return match[2];
+function getEffectiveDate(tx) {
+  // Returns the DD/MM string of whichever date mode is active
+  if (selectedDateMode === 'trans' && tx.transDate) return tx.transDate;
+  return tx.postDate || tx.date || '';
 }
 
 function getAvailableYears() {
@@ -2696,33 +2791,155 @@ function reparseRawTextFromPanel() {
   window.addManualTransaction = addManualTransaction;
 
   // -----------------------------
-  // Cashback
+  // Cashback Modal
   // -----------------------------
-  function addManualCashback() {
-    var amount = parseFloat(prompt('Enter cashback amount (RM):', '0.00'));
+  function openCashbackModal(id) {
+    var modal = $('cashback-modal');
+    if (!modal) return;
 
-    if (!amount) return;
+    // Populate quick-fill card chips from known cards
+    var chipContainer = $('cb-card-chips');
+    if (chipContainer) {
+      var knownCards = Array.from(new Set(
+        cashbacks.map(function(c) { return c.card || c.cardInfo || ''; })
+          .concat(transactions.map(function(t) { return t.cardInfo || ''; }))
+          .filter(Boolean)
+      ));
+      chipContainer.innerHTML = knownCards.slice(0, 6).map(function(card) {
+        return '<button type="button" onclick="document.getElementById(\'cb-card\').value=\''+escapeHtml(card).replace(/'/g,"\\'")+'\'\'" ' +
+          'class="text-[11px] bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-2 py-1 rounded-lg transition-colors">' +
+          escapeHtml(card) + '</button>';
+      }).join('');
+    }
 
-    var bankCard = prompt('Enter Bank / Card Name:', 'Manual Entry Card');
-    var merchant = prompt('Enter Description:', 'Bonus Reward');
+    // Clear or prefill
+    var idEl = $('cb-edit-id');
+    var dateEl = $('cb-date');
+    var cardEl = $('cb-card');
+    var merchantEl = $('cb-merchant');
+    var amtEl = $('cb-amount');
+    var titleEl = $('cashback-modal-title');
 
-    cashbacks.push({
-      id: Date.now(),
-      card: bankCard || 'Manual Entry',
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
-      merchant: merchant || 'Generic Card Promo',
+    if (id !== null && id !== undefined) {
+      var cb = cashbacks.find(function(c) { return c.id === id; });
+      if (cb) {
+        if (idEl) idEl.value = cb.id;
+        // Convert stored DD/MM to YYYY-MM-DD for date input
+      if (dateEl) {
+        var storedDate = cb.date || '';
+        var dmMatch = storedDate.match(/^(\d{2})\/(\d{2})(?:\/(\d{4}))?$/);
+        if (dmMatch) {
+          var yr = dmMatch[3] || String(new Date().getFullYear());
+          dateEl.value = yr + '-' + dmMatch[2] + '-' + dmMatch[1];
+        } else {
+          dateEl.value = storedDate;
+        }
+      }
+        if (cardEl) cardEl.value = cb.card || cb.cardInfo || '';
+        if (merchantEl) merchantEl.value = cb.merchant || '';
+        if (amtEl) amtEl.value = cb.amount || '';
+        if (titleEl) titleEl.textContent = 'Edit Cashback Entry';
+      }
+    } else {
+      if (idEl) idEl.value = '';
+      var today = new Date();
+      var dd = String(today.getDate()).padStart(2,'0');
+      var mm = String(today.getMonth()+1).padStart(2,'0');
+      if (dateEl) dateEl.value = String(today.getFullYear()) + '-' + mm + '-' + dd;
+      if (cardEl) cardEl.value = '';
+      if (merchantEl) merchantEl.value = '';
+      if (amtEl) amtEl.value = '';
+      if (titleEl) titleEl.textContent = 'Add Cashback Entry';
+    }
+
+    modal.classList.remove('hidden');
+    setTimeout(function() { if (cardEl) cardEl.focus(); }, 80);
+  }
+
+  function closeCashbackModal() {
+    var modal = $('cashback-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function saveCashbackEntry() {
+    var id     = $('cb-edit-id') ? $('cb-edit-id').value : '';
+    var cbDateRaw = $('cb-date') ? $('cb-date').value.trim() : '';
+    // Convert YYYY-MM-DD (from date input) → DD/MM/YYYY for storage
+    var date;
+    var isoMatch = cbDateRaw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      date = isoMatch[3] + '/' + isoMatch[2] + '/' + isoMatch[1];
+    } else {
+      date = cbDateRaw; // already DD/MM or similar
+    }
+    var card   = $('cb-card') ? $('cb-card').value.trim() : '';
+    var merc   = $('cb-merchant') ? $('cb-merchant').value.trim() : '';
+    var amount = parseFloat($('cb-amount') ? $('cb-amount').value : 0);
+
+    if (!card) { toast('Please enter a card or bank name.'); return; }
+    if (!merc) { toast('Please enter a description.'); return; }
+    if (!amount || amount <= 0) { toast('Please enter a valid amount.'); return; }
+
+    var entry = {
+      card: card,
+      date: date || (function(){
+        var t = new Date();
+        return String(t.getDate()).padStart(2,'0')+'/'+String(t.getMonth()+1).padStart(2,'0');
+      })(),
+      merchant: merc,
       amount: amount
-    });
+    };
 
+    if (id) {
+      var idx = cashbacks.findIndex(function(c){ return String(c.id) === String(id); });
+      if (idx !== -1) {
+        cashbacks[idx] = Object.assign({}, cashbacks[idx], entry);
+        toast('Cashback entry updated.');
+      }
+    } else {
+      entry.id = Date.now();
+      cashbacks.push(entry);
+      toast('Cashback entry added.');
+    }
+
+    closeCashbackModal();
+    renderCashback();
+    renderPeriodFilters();
+  }
+
+  function deleteCashback(id) {
+    cashbacks = cashbacks.filter(function(c){ return c.id !== id; });
     renderCashback();
   }
 
+  function filterCashbackByCard(card) {
+    var cbSearch = $('cashback-search-input');
+    if (!cbSearch) return;
+    // Toggle: clicking the active card clears the filter
+    if (cbSearch.value.trim() === card) {
+      cbSearch.value = '';
+    } else {
+      cbSearch.value = card;
+    }
+    renderCashback();
+  }
+
+  function addManualCashback() {
+    openCashbackModal(null);
+  }
+
+  window.filterCashbackByCard = filterCashbackByCard;
   window.addManualCashback = addManualCashback;
+  window.openCashbackModal = openCashbackModal;
+  window.closeCashbackModal = closeCashbackModal;
+  window.saveCashbackEntry = saveCashbackEntry;
+  window.deleteCashback = deleteCashback;
 
   // -----------------------------
   // Rendering
   // -----------------------------
   function renderAll() {
+    renderPeriodFilters();        // populate year/month dropdowns from live data
     renderConsoleTable();
     renderMasterTransactions();
     renderAnalyticsCards();
@@ -2750,7 +2967,10 @@ function reparseRawTextFromPanel() {
       tbody.innerHTML +=
         '<tr class="hover:bg-slate-800/50 transition-colors">' +
         '<td class="px-4 py-3 whitespace-nowrap">' +
-        '<div class="text-white">' + escapeHtml(t.postDate) + '</div>' +
+        '<div class="text-white font-mono text-xs">' + escapeHtml(t.postDate) + '</div>' +
+        (t.transDate && t.transDate !== t.postDate
+          ? '<div class="text-[10px] text-slate-500 font-mono">T: ' + escapeHtml(t.transDate) + '</div>'
+          : '') +
         '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
         escapeHtml(t.cardInfo || 'Unknown') +
         '</div>' +
@@ -2790,7 +3010,11 @@ function reparseRawTextFromPanel() {
 
     var term = filterText.toLowerCase();
 
-    var filtered = transactions.filter(function (t) {
+    // Apply period filter first, then text search
+    var periodFiltered = getFilteredTransactions();
+
+    var filtered = periodFiltered.filter(function (t) {
+      if (!term) return true;
       return String(t.merchant || '').toLowerCase().indexOf(term) !== -1 ||
         String(t.mappedMerchant || '').toLowerCase().indexOf(term) !== -1 ||
         String(t.category || '').toLowerCase().indexOf(term) !== -1 ||
@@ -2809,8 +3033,11 @@ function reparseRawTextFromPanel() {
     filtered.forEach(function (t) {
       desktopBody.innerHTML +=
         '<tr class="hover:bg-slate-800/50 transition-colors">' +
-        '<td class="px-4 py-3 whitespace-nowrap text-slate-400">' +
-        '<div>' + escapeHtml(t.postDate) + '</div>' +
+        '<td class="px-4 py-3 whitespace-nowrap">' +
+        '<div class="text-slate-200 font-mono text-xs">' + escapeHtml(t.postDate) + '</div>' +
+        (t.transDate && t.transDate !== t.postDate
+          ? '<div class="text-[10px] text-slate-500 font-mono">T: ' + escapeHtml(t.transDate) + '</div>'
+          : '') +
         '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
         escapeHtml(t.cardInfo || 'Unknown') +
         '</div>' +
@@ -2837,8 +3064,9 @@ function reparseRawTextFromPanel() {
         '</div>' +
         '<div class="flex justify-between items-end">' +
         '<div class="space-y-1">' +
-        '<div class="text-xs text-slate-400">' + escapeHtml(t.postDate) +
-        '<span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1">' + escapeHtml(t.cardInfo || 'Unknown') + '</span>' +
+        '<div class="text-xs text-slate-400 font-mono">' + escapeHtml(t.postDate) +
+        (t.transDate && t.transDate !== t.postDate ? ' <span class="text-slate-600">T:' + escapeHtml(t.transDate) + '</span>' : '') +
+        '<span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1 font-sans">' + escapeHtml(t.cardInfo || 'Unknown') + '</span>' +
         '</div>' +
         '<span class="inline-block text-[10px] bg-slate-800 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">' + escapeHtml(t.category) + '</span>' +
         '</div>' +
@@ -2851,19 +3079,20 @@ function reparseRawTextFromPanel() {
   }
 
   function renderAnalyticsCards() {
-    var total = transactions.reduce(function (sum, t) {
+    var filtered = getFilteredTransactions();
+
+    var total = filtered.reduce(function (sum, t) {
       return sum + (parseFloat(t.amount) || 0);
     }, 0);
 
     if ($('stat-total')) $('stat-total').innerText = total.toFixed(2);
-    if ($('stat-count')) $('stat-count').innerText = transactions.length;
+    if ($('stat-count')) $('stat-count').innerText = filtered.length;
 
     if ($('stat-high')) {
-      if (transactions.length > 0) {
-        var highest = transactions.reduce(function (prev, current) {
+      if (filtered.length > 0) {
+        var highest = filtered.reduce(function (prev, current) {
           return (prev.amount > current.amount) ? prev : current;
         });
-
         $('stat-high').innerText = highest.mappedMerchant || highest.merchant;
       } else {
         $('stat-high').innerText = '--';
@@ -2881,46 +3110,83 @@ function reparseRawTextFromPanel() {
     container.innerHTML = '';
     list.innerHTML = '';
 
+    // Apply period filter
+    var periodFiltered = getFilteredCashbacks();
+
+    // Get search term from cashback search box
+    var cbSearch = $('cashback-search-input');
+    var term = cbSearch ? cbSearch.value.toLowerCase() : '';
+
+    // Entries list respects the search/card filter
+    var filtered = periodFiltered;
+    if (term) {
+      filtered = filtered.filter(function(c) {
+        return String(c.merchant || '').toLowerCase().indexOf(term) !== -1 ||
+          String(c.card || c.cardInfo || '').toLowerCase().indexOf(term) !== -1 ||
+          String(c.date || '').indexOf(term) !== -1 ||
+          String(c.amount || '').indexOf(term) !== -1;
+      });
+    }
+
+    // Breakdown by card always uses period-filtered (not search-filtered) so all cards stay visible
     var grouped = {};
     var totalCashbackSum = 0;
 
-    cashbacks.forEach(function (c) {
+    periodFiltered.forEach(function (c) {
       var card = c.card || c.cardInfo || 'Unknown Statement';
       if (!grouped[card]) grouped[card] = 0;
-
       grouped[card] += parseFloat(c.amount || 0);
       totalCashbackSum += parseFloat(c.amount || 0);
     });
 
     if (totalDisplay) totalDisplay.innerText = totalCashbackSum.toFixed(2);
 
-    Object.keys(grouped).forEach(function (card) {
-      var amount = grouped[card];
+    if (Object.keys(grouped).length === 0) {
+      container.innerHTML =
+        '<div class="col-span-4 text-center text-slate-500 text-sm py-4">No cashback entries for the selected period.</div>';
+    } else {
+      var activeCard = cbSearch ? cbSearch.value.trim() : '';
+      Object.keys(grouped).forEach(function (card) {
+        var amount = grouped[card];
+        var isActive = activeCard === card;
+        container.innerHTML +=
+          '<div onclick="filterCashbackByCard(\'' + escapeHtml(card).replace(/'/g, "\\'") + '\')" ' +
+          'class="glass-panel p-4 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all ' +
+          (isActive ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/40' : 'border-slate-700 hover:border-emerald-700/50') + '">' +
+          '<div class="flex items-center gap-2 mb-3 ' + (isActive ? 'text-emerald-300' : 'text-slate-400') + '">' +
+          '<i class="ph ph-bank text-lg"></i>' +
+          '<span class="text-xs font-medium truncate">' + escapeHtml(card) + '</span>' +
+          (isActive ? '<i class="ph ph-x-circle ml-auto text-emerald-400 shrink-0" title="Clear filter"></i>' : '') +
+          '</div>' +
+          '<div class="text-2xl font-bold text-emerald-400">RM ' + money(amount) + '</div>' +
+          '</div>';
+      });
+    }
 
-      container.innerHTML +=
-        '<div class="glass-panel p-4 rounded-2xl border border-slate-700 relative flex flex-col justify-between hover:border-slate-500 transition-colors">' +
-        '<div class="flex items-center gap-2 mb-3 text-slate-400">' +
-        '<i class="ph ph-bank text-lg"></i>' +
-        '<span class="text-sm font-medium truncate">' + escapeHtml(card) + '</span>' +
-        '</div>' +
-        '<div class="text-2xl font-bold text-emerald-400">RM ' + money(amount) + '</div>' +
-        '</div>';
-    });
-
-    if (cashbacks.length === 0) {
+    if (filtered.length === 0) {
       list.innerHTML =
-        '<li class="p-4 text-center text-sm text-slate-500">No cashback entries found from statements or manual entry.</li>';
+        '<li class="p-6 text-center text-sm text-slate-500">' +
+        (term ? 'No entries matched your search.' : 'No cashback entries for the selected period.') +
+        '</li>';
       return;
     }
 
-    cashbacks.slice().reverse().forEach(function (c) {
+    filtered.slice().reverse().forEach(function (c) {
       list.innerHTML +=
-        '<li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors">' +
-        '<div>' +
-        '<div class="font-medium text-white">' + escapeHtml(c.merchant) + '</div>' +
-        '<div class="text-xs text-slate-400">' + escapeHtml(c.date) + ' • ' + escapeHtml(c.card || c.cardInfo || 'Unknown') + '</div>' +
+        '<li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors group">' +
+        '<div class="flex-1 min-w-0 pr-4">' +
+        '<div class="font-medium text-white truncate">' + escapeHtml(c.merchant) + '</div>' +
+        '<div class="text-xs text-slate-400 mt-0.5">' + escapeHtml(c.date) +
+        ' &bull; <span class="text-slate-500">' + escapeHtml(c.card || c.cardInfo || 'Unknown') + '</span>' +
         '</div>' +
+        '</div>' +
+        '<div class="flex items-center gap-3 shrink-0">' +
         '<div class="font-bold text-emerald-400">+ RM ' + money(c.amount) + '</div>' +
+        '<div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">' +
+        '<button onclick="openCashbackModal(' + c.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors" title="Edit"><i class="ph ph-pencil-simple text-xs"></i></button>' +
+        '<button onclick="deleteCashback(' + c.id + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors" title="Delete"><i class="ph ph-trash text-xs"></i></button>' +
+        '</div>' +
+        '</div>' +
         '</li>';
     });
   }
@@ -2958,10 +3224,37 @@ function reparseRawTextFromPanel() {
     });
   }
 
+  function setDateMode(mode) {
+    selectedDateMode = mode;
+
+    // Update toggle button styles
+    var postBtn = document.getElementById('date-mode-post-btn');
+    var transBtn = document.getElementById('date-mode-trans-btn');
+    if (postBtn && transBtn) {
+      if (mode === 'post') {
+        postBtn.className = postBtn.className.replace('text-slate-400 hover:text-white', 'bg-primary text-white');
+        transBtn.className = transBtn.className.replace('bg-primary text-white', 'text-slate-400 hover:text-white');
+        if (!postBtn.className.includes('bg-primary')) postBtn.className += ' bg-primary text-white';
+      } else {
+        transBtn.className = transBtn.className.replace('text-slate-400 hover:text-white', 'bg-primary text-white');
+        postBtn.className = postBtn.className.replace('bg-primary text-white', 'text-slate-400 hover:text-white');
+        if (!transBtn.className.includes('bg-primary')) transBtn.className += ' bg-primary text-white';
+      }
+    }
+
+    // Rebuild dropdowns with the new date basis, then re-render
+    renderPeriodFilters();
+    renderAll();
+  }
+
+  window.setDateMode = setDateMode;
   window.renderAll = renderAll;
   window.filterTransactions = filterTransactions;
   window.renderMasterTransactions = renderMasterTransactions;
   window.renderCashback = renderCashback;
+  window.renderPeriodFilters = renderPeriodFilters;
+  window.onPeriodFilterChanged = onPeriodFilterChanged;
+  window.resetPeriodFilter = resetPeriodFilter;
 
   // -----------------------------
   // Chart
@@ -2977,7 +3270,7 @@ function reparseRawTextFromPanel() {
 
     var groupData = {};
 
-    transactions.forEach(function (t) {
+    getFilteredTransactions().forEach(function (t) {
       var cat = t.category || 'Uncategorized';
       groupData[cat] = (groupData[cat] || 0) + Math.abs(parseFloat(t.amount || 0));
     });
