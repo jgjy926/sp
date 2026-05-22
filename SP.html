@@ -138,11 +138,37 @@
         <div id="main-scroll-area" class="flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 pb-24 md:pb-8">
             
             <section id="tab-console" class="tab-content active max-w-5xl mx-auto space-y-6">
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h2 class="text-2xl font-bold text-white">Parser Console</h2>
-                        <p class="text-slate-400 text-sm">Upload, decrypt, and parse statements securely.</p>
-                    </div>
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+  <div>
+    <h2 class="text-2xl font-bold text-white">Analytics</h2>
+    <p class="text-slate-400 text-sm">Interactive category breakdowns and transaction search.</p>
+  </div>
+
+  <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
+    <select
+      id="analytics-year-filter"
+      onchange="onPeriodFilterChanged('analytics')"
+      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+    >
+      <option value="all">All Years</option>
+    </select>
+
+    <select
+      id="analytics-month-filter"
+      onchange="onPeriodFilterChanged('analytics')"
+      class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+    >
+      <option value="all">All Months</option>
+    </select>
+
+    <button
+      onclick="resetPeriodFilter()"
+      class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
+    >
+      Reset
+    </button>
+  </div>
+</div>
                     <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
                         <span class="text-xs text-slate-400">Confidence:</span>
                         <span id="confidence-score" class="font-bold text-green-400">--%</span>
@@ -170,18 +196,55 @@
                     </div>
                 </div>
 
-                <div id="raw-text-panel" class="hidden glass-panel rounded-2xl p-4 border border-slate-700">
-                    <button onclick="toggleRawTextInspector()" class="w-full flex items-center justify-between text-slate-300 hover:text-white transition-colors">
-                        <span class="font-medium flex items-center gap-2">
-                            <i class="ph ph-file-text text-indigo-400"></i> Raw Extracted Text Inspector
-                        </span>
-                        <i id="raw-text-chevron" class="ph ph-caret-down transition-transform"></i>
-                    </button>
-                    <div id="raw-text-container" class="hidden mt-3 pt-3 border-t border-slate-800">
-                        <p class="text-xs text-slate-400 mb-2">Here is the exact character stream read by PDF.js inside your browser. You can use this to see if the PDF text is scrambled or columns are misaligned:</p>
-                        <textarea id="raw-text-output" readonly class="w-full h-48 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-slate-700 no-scrollbar"></textarea>
-                    </div>
-                </div>
+
+<div id="raw-text-panel" class="hidden glass-panel rounded-2xl p-4 border border-slate-700">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <button onclick="toggleRawTextInspector()" class="flex-1 flex items-center justify-between text-slate-300 hover:text-white transition-colors">
+      <span class="font-medium flex items-center gap-2">
+        <i class="ph ph-file-text text-indigo-400"></i>
+        Raw Extracted Text Inspector
+      </span>
+      <i id="raw-text-chevron" class="ph ph-caret-down transition-transform"></i>
+    </button>
+
+    <div class="flex flex-wrap gap-2">
+      <button onclick="copyRawText()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+        <i class="ph ph-copy"></i>
+        Copy
+      </button>
+
+      <button onclick="downloadRawText()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+        <i class="ph ph-download-simple"></i>
+        Download TXT
+      </button>
+
+      <button onclick="reparseRawTextFromPanel()" class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+        <i class="ph ph-arrows-clockwise"></i>
+        Re-parse
+      </button>
+    </div>
+  </div>
+
+  <div id="raw-text-container" class="hidden mt-3 pt-3 border-t border-slate-800">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
+      <p class="text-xs text-slate-400">
+        This is the exact text extracted locally by PDF.js. Use this panel for parser QA without pasting statement text into AI chat.
+      </p>
+
+      <div class="text-xs text-slate-500">
+        Characters:
+        <span id="raw-text-count" class="text-slate-300">0</span>
+      </div>
+    </div>
+
+    <textarea
+      id="raw-text-output"
+      readonly
+      class="w-full h-72 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-slate-700 no-scrollbar"
+    ></textarea>
+  </div>
+</div>
+
 
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden" id="extraction-results">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
@@ -293,15 +356,43 @@
             </section>
 
             <section id="tab-cashback" class="tab-content max-w-5xl mx-auto space-y-6">
-                <div class="flex justify-between items-end">
-                    <div>
-                        <h2 class="text-2xl font-bold text-white">Cashback Dashboard</h2>
-                        <p class="text-slate-400 text-sm">Total savings extracted directly from statements and manual entries.</p>
-                    </div>
-                    <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600 flex items-center gap-2" onclick="addManualCashback()">
-                        <i class="ph ph-plus"></i> Add Entry
-                    </button>
-                </div>
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+  <div>
+    <h2 class="text-2xl font-bold text-white">Cashback Dashboard</h2>
+    <p class="text-slate-400 text-sm">Total savings extracted directly from statements and manual entries.</p>
+  </div>
+
+  <div class="flex flex-col sm:flex-row gap-2">
+    <div class="glass-panel border border-slate-700 rounded-2xl p-3 flex flex-col sm:flex-row gap-2">
+      <select
+        id="cashback-year-filter"
+        onchange="onPeriodFilterChanged('cashback')"
+        class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+      >
+        <option value="all">All Years</option>
+      </select>
+
+      <select
+        id="cashback-month-filter"
+        onchange="onPeriodFilterChanged('cashback')"
+        class="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-primary"
+      >
+        <option value="all">All Months</option>
+      </select>
+
+      <button
+        onclick="resetPeriodFilter()"
+        class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 transition-colors"
+      >
+        Reset
+      </button>
+    </div>
+
+    <button class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm border border-slate-600 flex items-center justify-center gap-2" onclick="addManualCashback()">
+      <i class="ph ph-plus"></i> Add Entry
+    </button>
+  </div>
+</div>
 
                 <div class="glass-panel p-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/10 flex flex-col items-center justify-center text-center">
                     <p class="text-sm text-emerald-400 font-medium mb-2 uppercase tracking-wide">Total Monthly Cashback</p>
@@ -573,6 +664,9 @@
   var currentTab = 'console';
   var chartInstance = null;
 
+    var selectedYear = 'all';
+    var selectedMonth = 'all';
+
   var sessionSettings = {
     cfUrl: '',
     useAI: false,
@@ -613,6 +707,166 @@
   function $(id) {
     return document.getElementById(id);
   }
+
+ const MONTH_LABELS = [
+  { value: 'all', label: 'All Months' },
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' }
+];
+
+function getStatementYearFallback() {
+  const raw = document.getElementById('raw-text-output')?.value || '';
+
+  const statementDateMatch = raw.match(/Statement Date\/.*?(\d{1,2})\s+([A-Z]{3})\s+(\d{2,4})/i);
+
+  if (statementDateMatch) {
+    let yy = statementDateMatch[3];
+
+    if (yy.length === 2) {
+      yy = '20' + yy;
+    }
+
+    return yy;
+  }
+
+  return String(new Date().getFullYear());
+}
+
+function inferTransactionYear(tx) {
+  if (tx.year) return String(tx.year);
+
+  if (tx.fullDate) {
+    const fullDateMatch = String(tx.fullDate).match(/\b(20\d{2}|19\d{2})\b/);
+    if (fullDateMatch) return fullDateMatch[1];
+  }
+
+  return getStatementYearFallback();
+}
+
+function inferTransactionMonth(tx) {
+  const d = String(tx.postDate || tx.date || '');
+
+  const match = d.match(/^(\d{2})\/(\d{2})/);
+
+  if (!match) return 'unknown';
+
+  return match[2];
+}
+
+function getAvailableYears() {
+  const years = new Set();
+
+  transactions.forEach(tx => {
+    years.add(inferTransactionYear(tx));
+  });
+
+  cashbacks.forEach(cb => {
+    years.add(inferTransactionYear(cb));
+  });
+
+  years.add(getStatementYearFallback());
+
+  return Array.from(years)
+    .filter(Boolean)
+    .sort((a, b) => Number(b) - Number(a));
+}
+
+function isWithinSelectedPeriod(item) {
+  const itemYear = inferTransactionYear(item);
+  const itemMonth = inferTransactionMonth(item);
+
+  const yearOk = selectedYear === 'all' || itemYear === selectedYear;
+  const monthOk = selectedMonth === 'all' || itemMonth === selectedMonth;
+
+  return yearOk && monthOk;
+}
+
+function getFilteredTransactions() {
+  return transactions.filter(isWithinSelectedPeriod);
+}
+
+function getFilteredCashbacks() {
+  return cashbacks.filter(isWithinSelectedPeriod);
+}
+
+function renderPeriodFilters() {
+  const years = getAvailableYears();
+
+  const yearOptions =
+    `<option value="all">All Years</option>` +
+    years.map(y => `<option value="${y}">${y}</option>`).join('');
+
+  const monthOptions = MONTH_LABELS
+    .map(m => `<option value="${m.value}">${m.label}</option>`)
+    .join('');
+
+  ['analytics-year-filter', 'cashback-year-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const old = el.value || selectedYear;
+    el.innerHTML = yearOptions;
+    el.value = years.includes(old) || old === 'all' ? old : 'all';
+  });
+
+  ['analytics-month-filter', 'cashback-month-filter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const old = el.value || selectedMonth;
+    el.innerHTML = monthOptions;
+    el.value = MONTH_LABELS.some(m => m.value === old) ? old : 'all';
+  });
+}
+
+function onPeriodFilterChanged(source) {
+  const yearEl = document.getElementById(`${source}-year-filter`);
+  const monthEl = document.getElementById(`${source}-month-filter`);
+
+  selectedYear = yearEl ? yearEl.value : selectedYear;
+  selectedMonth = monthEl ? monthEl.value : selectedMonth;
+
+  // Keep both dashboard filter bars synced.
+  ['analytics', 'cashback'].forEach(prefix => {
+    const y = document.getElementById(`${prefix}-year-filter`);
+    const m = document.getElementById(`${prefix}-month-filter`);
+
+    if (y) y.value = selectedYear;
+    if (m) m.value = selectedMonth;
+  });
+
+  renderAnalyticsCards();
+  renderMasterTransactions();
+  renderCashback();
+
+  if (currentTab === 'analytics') {
+    initChart();
+  }
+}
+
+function resetPeriodFilter() {
+  selectedYear = 'all';
+  selectedMonth = 'all';
+
+  renderPeriodFilters();
+  renderAnalyticsCards();
+  renderMasterTransactions();
+  renderCashback();
+
+  if (currentTab === 'analytics') {
+    initChart();
+  }
+}   
 
   function safeText(value, fallback) {
     if (value === null || value === undefined || value === '') {
@@ -1608,6 +1862,77 @@ console.log('LOCAL STRUCTURE QA', {
 
   window.parseSourcedTransactions = parseSourcedTransactions;
 
+function updateRawTextCount() {
+  const raw = document.getElementById('raw-text-output');
+  const count = document.getElementById('raw-text-count');
+
+  if (!raw || !count) return;
+
+  count.innerText = String((raw.value || '').length);
+}
+
+function copyRawText() {
+  const raw = document.getElementById('raw-text-output');
+
+  if (!raw || !raw.value) {
+    showMessage('No raw extracted text available yet.');
+    return;
+  }
+
+  navigator.clipboard.writeText(raw.value)
+    .then(() => showMessage('Raw extracted text copied.'))
+    .catch(() => {
+      raw.select();
+      document.execCommand('copy');
+      showMessage('Raw extracted text copied.');
+    });
+}
+
+function downloadRawText() {
+  const raw = document.getElementById('raw-text-output');
+
+  if (!raw || !raw.value) {
+    showMessage('No raw extracted text available yet.');
+    return;
+  }
+
+  const fileBase = selectedFileName
+    ? selectedFileName.replace(/\.pdf$/i, '')
+    : 'statement_raw_extract';
+
+  const blob = new Blob([raw.value], { type: 'text/plain;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+
+  a.href = url;
+  a.download = `${fileBase}_raw_extract.txt`;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  window.URL.revokeObjectURL(url);
+
+  showMessage('Raw extracted text downloaded.');
+}
+
+function reparseRawTextFromPanel() {
+  const raw = document.getElementById('raw-text-output');
+
+  if (!raw || !raw.value.trim()) {
+    showMessage('No raw extracted text available to re-parse.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Re-parse this raw text? This will add another parsed batch to the current session unless you clear existing data first.'
+  );
+
+  if (!confirmed) return;
+
+  executeTextParsing(raw.value);
+}
+    
   // -----------------------------
   // Raw text inspector / password modal
   // -----------------------------
