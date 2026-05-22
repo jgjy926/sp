@@ -1445,94 +1445,166 @@ const lines = String(blockText || '')
 
   window.parseLocalTextRegex = parseLocalTextRegex;
 
-  function parseSourcedTransactions(aiString, rawText) {
-    try {
-      var cleanJson = JSON.parse(aiString);
+function parseSourcedTransactions(aiString, rawText) {
+  try {
+    const cleanJson = JSON.parse(aiString);
 
-      if (!Array.isArray(cleanJson)) {
-        parseLocalTextRegex(rawText || aiString);
-        return;
+    if (!Array.isArray(cleanJson)) {
+      parseLocalTextRegex(rawText || aiString);
+      return;
+    }
+
+    const localData = extractLocalStructure(rawText || '');
+
+console.log('LOCAL STRUCTURE QA', {
+  cards: Array.from(localData.cardsFound),
+  tx: localData.structuralTx,
+  cb: localData.structuralCb
+});
+
+    updateInsightBanner(localData, 'Hybrid Local-AI');
+
+    /**
+     * Local rows are the source of truth for:
+     * - card section mapping
+     * - rows missed by AI/LLM
+     */
+    let availableLocalTx = [...localData.structuralTx];
+
+    // Learn new AI categories.
+    cleanJson.forEach(t => {
+      if (t.category && !appCategories.includes(t.category) && t.category !== 'Uncategorized') {
+        appCategories.push(t.category);
+      }
+    });
+
+    renderCategories();
+
+    const parsedTx = [];
+    let idCounter = Date.now();
+
+    cleanJson.forEach(t => {
+      const rawMerc = t.merchant || 'Generic';
+      const aiCat = t.category || 'Uncategorized';
+      const amt = parseFloat(t.amount) || 0;
+      const date = t.postDate || 'Today';
+
+      let exactCardMatch = t.cardInfo || localData.globalBankName || 'Unknown Card';
+
+      /**
+       * Match AI row back to local row.
+       * Use amount + post date.
+       */
+      const localIndexMatch = availableLocalTx.findIndex(lt =>
+        Number(lt.amount).toFixed(2) === Number(amt).toFixed(2) &&
+        String(lt.postDate) === String(date)
+      );
+
+      if (localIndexMatch > -1) {
+        exactCardMatch = availableLocalTx[localIndexMatch].cardInfo;
+
+        // Remove matched local row so the fallback below does not duplicate it.
+        availableLocalTx.splice(localIndexMatch, 1);
       }
 
-      var localData = extractLocalStructure(rawText || '');
-      updateInsightBanner(localData, 'Hybrid Local-AI');
+      const upperRaw = rawMerc.toUpperCase();
+      const upperCat = aiCat.toUpperCase();
 
-      var availableLocalTx = localData.structuralTx.slice();
+      const matchedRule = rules.find(r =>
+        upperRaw.includes(String(r.trigger || '').toUpperCase()) ||
+        String(r.trigger || '').toUpperCase() === upperCat
+      );
 
-      cleanJson.forEach(function (t) {
-        if (t.category && appCategories.indexOf(t.category) === -1 && t.category !== 'Uncategorized') {
-          appCategories.push(t.category);
-        }
-      });
+      const isCashback =
+        upperRaw.includes('CASH BACK') ||
+        upperRaw.includes('CASHBACK') ||
+        upperRaw.includes('CASH REBATE') ||
+        upperRaw.includes('REBATE') ||
+        upperCat.includes('CASHBACK');
 
-      renderCategories();
+      const isPayment =
+        upperRaw.includes('PYMT@') ||
+        upperRaw.includes('PAYMENT');
 
-      var parsedTx = [];
-      var idCounter = Date.now();
-
-      cleanJson.forEach(function (t) {
-        var rawMerc = t.merchant || 'Generic';
-        var aiCat = t.category || 'Uncategorized';
-        var amt = parseFloat(t.amount) || 0;
-        var date = t.postDate || 'Today';
-
-        var exactCardMatch = t.cardInfo || localData.globalBankName || 'Unknown Card';
-
-        var localIndexMatch = availableLocalTx.findIndex(function (lt) {
-          return Number(lt.amount).toFixed(2) === Number(amt).toFixed(2) &&
-            String(lt.postDate) === String(date);
+      if (isCashback) {
+        cashbacks.push({
+          id: idCounter++,
+          card: exactCardMatch,
+          date: date,
+          merchant: rawMerc,
+          amount: amt
         });
-
-        if (localIndexMatch > -1) {
-          exactCardMatch = availableLocalTx[localIndexMatch].cardInfo;
-          availableLocalTx.splice(localIndexMatch, 1);
-        }
-
-        var upperRaw = rawMerc.toUpperCase();
-        var upperCat = aiCat.toUpperCase();
-
-        var matchedRule = rules.find(function (r) {
-          return upperRaw.indexOf(String(r.trigger || '').toUpperCase()) !== -1 ||
-            String(r.trigger || '').toUpperCase() === upperCat;
+      } else if (!isPayment && amt > 0) {
+        parsedTx.push({
+          id: idCounter++,
+          postDate: date,
+          transDate: t.transDate || date,
+          cardInfo: exactCardMatch,
+          merchant: rawMerc,
+          mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
+          category: matchedRule ? matchedRule.category : aiCat,
+          details: t.details || '',
+          amount: amt
         });
+      }
+    });
 
-        var isCashback =
-          upperRaw.indexOf('CASH BACK') !== -1 ||
-          upperRaw.indexOf('CASHBACK') !== -1 ||
-          upperRaw.indexOf('CASH REBATE') !== -1 ||
-          upperRaw.indexOf('REBATE') !== -1 ||
-          upperCat.indexOf('CASHBACK') !== -1;
+    /**
+     * CRITICAL FIX:
+     * Add local transactions that AI/LLM missed.
+     * This is what should recover the AMEX SPAYLATER rows.
+     */
+    availableLocalTx.forEach(lt => {
+      const ruleMapping = runRuleEngineOnText(lt.rawDesc);
 
-        if (isCashback) {
-          cashbacks.push({
-            id: idCounter++,
-            card: exactCardMatch,
-            date: date,
-            merchant: rawMerc,
-            amount: amt
-          });
-        } else {
-          parsedTx.push({
-            id: idCounter++,
-            postDate: date,
-            transDate: t.transDate || date,
-            cardInfo: exactCardMatch,
-            merchant: rawMerc,
-            mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
-            category: (matchedRule ? matchedRule.category : aiCat),
-            details: t.details || '',
-            amount: amt
-          });
-        }
+      parsedTx.push({
+        id: idCounter++,
+        postDate: lt.postDate,
+        transDate: lt.transDate,
+        cardInfo: lt.cardInfo,
+        merchant: lt.rawDesc,
+        mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : lt.rawDesc,
+        category: ruleMapping.category,
+        details: '',
+        amount: lt.amount,
+        source: 'Local fallback'
       });
+    });
 
-      parsedTx = enrichMissingCardInfo(parsedTx, localData.globalBankName);
-      transactions = transactions.concat(parsedTx);
-    } catch (e) {
-      console.error('Hybrid merge failed. Falling back to local parser.', e);
-      parseLocalTextRegex(rawText || aiString);
-    }
+    /**
+     * Also keep locally detected cashback/rebate rows.
+     * Prevent duplicate cashback if AI already added the same date/card/amount.
+     */
+    localData.structuralCb.forEach(cb => {
+      const duplicateCb = cashbacks.some(existing =>
+        String(existing.card || existing.cardInfo) === String(cb.cardInfo) &&
+        String(existing.date) === String(cb.date) &&
+        Number(existing.amount).toFixed(2) === Number(cb.amount).toFixed(2)
+      );
+
+      if (!duplicateCb) {
+        cashbacks.push({
+          id: idCounter++,
+          card: cb.cardInfo,
+          date: cb.date,
+          merchant: cb.rawDesc,
+          amount: cb.amount
+        });
+      }
+    });
+
+    const enrichedTx = enrichMissingCardInfo(parsedTx, localData.globalBankName);
+    transactions = transactions.concat(enrichedTx);
+
+    showMessage(
+      `Hybrid parse completed: ${enrichedTx.length} transactions loaded, including ${availableLocalTx.length} local fallback row(s).`
+    );
+
+  } catch (e) {
+    console.error('Hybrid merge failed. Falling back to local parser.', e);
+    parseLocalTextRegex(rawText || aiString);
   }
+}
 
   window.parseSourcedTransactions = parseSourcedTransactions;
 
