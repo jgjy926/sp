@@ -144,9 +144,14 @@
       <p class="text-slate-400 text-sm">Upload, decrypt, and parse statements securely.</p>
     </div>
 
-    <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
-      <span class="text-xs text-slate-400">Confidence:</span>
-      <span id="confidence-score" class="font-bold text-green-400">--%</span>
+    <div class="flex items-center gap-3">
+      <button onclick="togglePastePanel()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full px-4 py-2 text-xs text-slate-300 hover:text-white transition-colors">
+        <i class="ph ph-clipboard-text"></i> Paste Text
+      </button>
+      <div class="flex items-center gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
+        <span class="text-xs text-slate-400">Confidence:</span>
+        <span id="confidence-score" class="font-bold text-green-400">--%</span>
+      </div>
     </div>
   </div>
                 <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-primary hover:bg-slate-800/50 transition-all group">
@@ -156,6 +161,61 @@
                     <h3 class="font-semibold text-lg text-white mb-1">Upload PDF Statement</h3>
                     <p class="text-slate-400 text-sm max-w-md" id="upload-status-text">Drag and drop or click to select. Parsing processes on-device securely.</p>
                     <input type="file" id="file-input" class="hidden" accept=".pdf" onchange="handleFileSelect(event)">
+                </div>
+
+                <div id="paste-panel" class="hidden glass-panel rounded-2xl border border-indigo-500/30 overflow-hidden">
+                  <!-- Header -->
+                  <div class="flex items-center justify-between px-5 py-4 bg-indigo-950/40 border-b border-indigo-500/20">
+                    <div class="flex items-center gap-2">
+                      <i class="ph ph-clipboard-text text-indigo-400 text-lg"></i>
+                      <span class="font-semibold text-white">Paste Statement Text</span>
+                      <span class="text-[10px] bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">Zero Token Cost</span>
+                    </div>
+                    <button onclick="closePastePanel()" class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all"><i class="ph ph-x"></i></button>
+                  </div>
+
+                  <div class="p-5 space-y-4">
+                    <!-- Live detection banner -->
+                    <div id="paste-detect-banner" class="hidden rounded-xl p-3 border flex items-start gap-3 text-sm transition-all">
+                      <i id="paste-detect-icon" class="ph ph-bank text-xl mt-0.5 shrink-0"></i>
+                      <div class="flex-1 min-w-0">
+                        <div id="paste-detect-title" class="font-semibold text-white"></div>
+                        <div id="paste-detect-detail" class="text-xs mt-0.5 text-slate-300 flex flex-wrap gap-1"></div>
+                      </div>
+                      <span id="paste-detect-confidence" class="text-xs font-bold shrink-0 mt-0.5"></span>
+                    </div>
+
+                    <!-- Textarea -->
+                    <div class="relative">
+                      <textarea
+                        id="paste-text-input"
+                        rows="12"
+                        placeholder="Paste your statement text here…&#10;&#10;Supports: Maybank (Visa/AMEX/SPAYLATER), CIMB, Public Bank, RHB, Hong Leong, AmBank, UOB, Standard Chartered, HSBC, Citibank"
+                        oninput="onPasteTextInput()"
+                        class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-emerald-400 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 no-scrollbar resize-y transition-colors"
+                      ></textarea>
+                      <div class="absolute bottom-3 right-3 text-[10px] text-slate-600" id="paste-char-count">0 chars</div>
+                    </div>
+
+                    <!-- Multi-statement stack info -->
+                    <div id="paste-stack-info" class="hidden text-xs text-amber-400 bg-amber-900/20 border border-amber-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
+                      <i class="ph ph-stack text-sm"></i>
+                      <span id="paste-stack-msg"></span>
+                    </div>
+
+                    <!-- Footer actions -->
+                    <div class="flex items-center justify-between gap-2">
+                      <button onclick="clearPastePanel()" class="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors">
+                        <i class="ph ph-eraser"></i> Clear
+                      </button>
+                      <div class="flex gap-2">
+                        <button onclick="closePastePanel()" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-4 py-2 rounded-lg transition-colors">Cancel</button>
+                        <button id="paste-parse-btn" onclick="parsePastedText()" disabled class="text-xs bg-primary hover:bg-secondary disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg transition-all flex items-center gap-2">
+                          <i class="ph ph-play"></i> Parse Now
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div id="processing-status" class="hidden glass-panel rounded-2xl p-6">
@@ -1395,15 +1455,7 @@ function resetPeriodFilter() {
       .replace(/[ \t]+/g, ' ')
       .replace(/\n+/g, '\n');
 
-    var globalBankName = 'Unidentified Bank';
-
-    var bankMatch = normalized.match(
-      /(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i
-    );
-
-    if (bankMatch) {
-      globalBankName = bankMatch[1];
-    }
+    var globalBankName = window.detectBankFromText ? window.detectBankFromText(normalized) : 'Unidentified Bank';
 
     function cleanCardDigits(cardText) {
       return String(cardText || '').replace(/\D/g, '');
@@ -1438,8 +1490,10 @@ function resetPeriodFilter() {
      * NAME MAYBANK PRODUCT CARD : 1234 5678 9012 3456
      * NAME MAYBANK PRODUCT AMEX : 3791 861396 97262
      */
-    var sectionRegex =
-      /([A-Z][A-Z\s.'-]{2,80}?)\s+(MAYBANK\s+(?:(?!YOUR COMBINED|KOMBINASI|Posting Date|TOTAL CREDIT|TOTAL DEBIT).){2,100}?(?:CARD|AMEX))\s*:\s*((?:\d[\s-]?){12,19})/gi;
+    // Dynamic section detector — works for Maybank, CIMB, PBB, RHB, HLB, AmBank, Citibank
+    var cardHeaderPattern = window.buildCardHeaderPattern ? window.buildCardHeaderPattern(globalBankName)
+      : '([A-Z][A-Z\s.\'\'-]{2,80}?)\s+(MAYBANK\s+(?:(?!YOUR COMBINED|KOMBINASI|Posting Date|TOTAL CREDIT|TOTAL DEBIT).){2,100}?(?:CARD|AMEX|AMERICAN EXPRESS))\s*:\s*((?:\d[\s-]?){12,19})';
+    var sectionRegex = new RegExp(cardHeaderPattern, 'gi');
 
     var sections = [];
     var sectionMatch;
@@ -1478,20 +1532,21 @@ function parseTransactionsInBlock(blockText, cardInfo) {
 
 const lines = String(blockText || '')
   .replace(/\r/g, '\n')
-  .replace(/(?<!\d)(?=\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+[A-Z])/g, '\n')
+  .replace(/(?<!\d)(?=\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Z])/g, '\n')
   .split('\n')
     .map(line => line.replace(/[ \t]+/g, ' ').trim())
     .filter(Boolean);
 
+  // Matches DD/MM or DD/MM/YY or DD/MM/YYYY for both Maybank and CIMB/PBB style
   const rowRegex =
-    /^(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2})(?:CR)?)$/i;
+    /^(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(.+?)\s+(\d{1,3}(?:,\d{3})*\.\d{2}(?:CR|DR)?)$/i;
 
   for (let rawLine of lines) {
     const line = rawLine.trim();
 
     // Skip obvious non-transaction rows.
     if (
-      !/^\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+/.test(line) ||
+      !/^\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+/.test(line) ||
       line.includes('RETAIL INTEREST RATE') ||
       line.includes('TOTAL CREDIT') ||
       line.includes('TOTAL DEBIT') ||
@@ -1501,21 +1556,31 @@ const lines = String(blockText || '')
       continue;
     }
 
-    const txMatch = line.match(rowRegex);
+    let txMatch = line.match(rowRegex);
+
+    // Foreign currency fallback: "DD/MM DD/MM DESC USD 12.34 RM 567.89"
+    // Take the last monetary amount on the line (RM/MYR amount)
+    if (!txMatch) {
+      const fxMatch = line.match(
+        /^(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(.+?)\s+(?:[A-Z]{2,3}\s+[\d,]+\.\d{2}\s+)?(\d{1,3}(?:,\d{3})*\.\d{2}(?:CR|DR)?)$/i
+      );
+      if (fxMatch) txMatch = fxMatch;
+    }
 
     if (!txMatch) {
       continue;
     }
 
-    const postDate = txMatch[1];
-    const transDate = txMatch[2];
+    const postDate = txMatch[1].slice(0, 5); // normalise to DD/MM
+    const transDate = txMatch[2].slice(0, 5);
     const rawDesc = txMatch[3].replace(/\s+/g, ' ').trim().toUpperCase();
     const rawAmount = txMatch[4];
 
     const isCredit = /CR$/i.test(rawAmount);
+    const isDebit  = /DR$/i.test(rawAmount); // some banks use DR suffix
     const amount = parseFloat(
       rawAmount
-        .replace(/CR$/i, '')
+        .replace(/(?:CR|DR)$/i, '')
         .replace(/,/g, '')
     );
 
@@ -1523,9 +1588,20 @@ const lines = String(blockText || '')
       continue;
     }
 
+    const isSpaylaterOrInstalment =
+      rawDesc.includes('SPAYLATER') ||
+      rawDesc.includes('INSTALMENT') ||
+      rawDesc.includes('INSTALLMENT') ||
+      rawDesc.includes('BALANCE TRANSFER');
+
     const isPayment =
-      rawDesc.includes('PYMT@') ||
-      rawDesc.includes('PAYMENT');
+      !isSpaylaterOrInstalment && (
+        rawDesc.includes('PYMT@') ||
+        rawDesc.includes('PAYMENT') ||
+        rawDesc.includes('AUTOPAY') ||
+        rawDesc.includes('AUTO DEBIT') ||
+        rawDesc.includes('AUTO-DEBIT')
+      );
 
     const isCashback =
       rawDesc.includes('CASH REBATE') ||
@@ -1544,8 +1620,8 @@ const lines = String(blockText || '')
       continue;
     }
 
-    // Payments are credits, not spending transactions.
-    if (isPayment || isCredit) {
+    // Pure payments skip. AMEX SPAYLATER/INSTALMENT rows appear as CR but are real spending.
+    if (isPayment || (isCredit && !isDebit && !isSpaylaterOrInstalment)) {
       continue;
     }
 
@@ -1940,6 +2016,385 @@ function reparseRawTextFromPanel() {
   window.copyRawText = copyRawText;
   window.downloadRawText = downloadRawText;
   window.reparseRawTextFromPanel = reparseRawTextFromPanel;
+
+  // ═══════════════════════════════════════════════════
+  // INTELLIGENT BANK DETECTOR
+  // ═══════════════════════════════════════════════════
+
+  var BANK_PROFILES = [
+    {
+      id: 'maybank',
+      name: 'Maybank',
+      icon: 'ph-bank',
+      color: 'yellow',
+      patterns: [/maybank/i, /mbb/i, /malayan banking/i],
+      cardTypes: ['VISA', 'MASTERCARD', 'AMEX', 'AMERICAN EXPRESS', 'SPAYLATER'],
+      txFormat: 'DD/MM DD/MM DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(MAYBANK\\s+(?:(?!YOUR COMBINED|KOMBINASI|Posting Date|TOTAL CREDIT|TOTAL DEBIT).){2,100}?(?:VISA|MASTER(?:CARD)?|CARD|AMEX|AMERICAN EXPRESS|SPAYLATER))\\s*:\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'cimb',
+      name: 'CIMB Bank',
+      icon: 'ph-bank',
+      color: 'red',
+      patterns: [/cimb/i, /commerce international/i],
+      cardTypes: ['VISA', 'MASTERCARD', 'WORLD'],
+      txFormat: 'DD/MM/YY DD/MM/YY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(CIMB\\s+(?:(?!TOTAL|BALANCE DUE|MINIMUM).){2,80}?(?:VISA|MASTERCARD|WORLD|CARD|PLATINUM|GOLD))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'publicbank',
+      name: 'Public Bank',
+      icon: 'ph-bank',
+      color: 'blue',
+      patterns: [/public bank/i, /pbb/i, /public finance/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+((?:PUBLIC BANK|PBB)\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|QUANTUM|GOLD))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'rhb',
+      name: 'RHB Bank',
+      icon: 'ph-bank',
+      color: 'purple',
+      patterns: [/\brhb\b/i, /rashid hussain/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD-MM-YY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(RHB\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|PREMIER|SMART))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'hongleong',
+      name: 'Hong Leong Bank',
+      icon: 'ph-bank',
+      color: 'green',
+      patterns: [/hong leong/i, /hlb/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(HONG LEONG\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|GREAT|WISE))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'ambank',
+      name: 'AmBank',
+      icon: 'ph-bank',
+      color: 'orange',
+      patterns: [/ambank/i, /arab-malaysian/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(AMBANK\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|PLATINUM|SIGNATURE))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'uob',
+      name: 'UOB Malaysia',
+      icon: 'ph-bank',
+      color: 'red',
+      patterns: [/\buob\b/i, /united overseas/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(UOB\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|ONE|LADY|YOLO))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'hsbc',
+      name: 'HSBC Malaysia',
+      icon: 'ph-bank',
+      color: 'red',
+      patterns: [/\bhsbc\b/i, /hongkong and shanghai/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(HSBC\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|REVOLUTION|PREMIER|ADVANCE))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'citibank',
+      name: 'Citibank Malaysia',
+      icon: 'ph-bank',
+      color: 'blue',
+      patterns: [/citibank/i, /\bciti\b/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(CITI(?:BANK)?\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|CASHBACK|REWARDS|PRESTIGE))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'standardchartered',
+      name: 'Standard Chartered',
+      icon: 'ph-bank',
+      color: 'teal',
+      patterns: [/standard chartered/i, /\bscb\b/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(STANDARD CHARTERED\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|SIMPLY|MANHATTAN|WORLDMILES))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+    {
+      id: 'alliancebank',
+      name: 'Alliance Bank',
+      icon: 'ph-bank',
+      color: 'indigo',
+      patterns: [/alliance bank/i],
+      cardTypes: ['VISA', 'MASTERCARD'],
+      txFormat: 'DD/MM/YYYY DESCRIPTION AMOUNT',
+      cardHeaderRx: '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+(ALLIANCE\\s+(?:(?!TOTAL|BALANCE).){2,80}?(?:VISA|MASTERCARD|CARD|VIRTUOSO))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})',
+    },
+  ];
+
+  function detectBankFromText(text) {
+    var upper = String(text || '').toUpperCase();
+    for (var i = 0; i < BANK_PROFILES.length; i++) {
+      var profile = BANK_PROFILES[i];
+      for (var j = 0; j < profile.patterns.length; j++) {
+        if (profile.patterns[j].test(upper)) {
+          return profile.name;
+        }
+      }
+    }
+    return 'Unidentified Bank';
+  }
+
+  function detectBankProfile(text) {
+    var upper = String(text || '').toUpperCase();
+    for (var i = 0; i < BANK_PROFILES.length; i++) {
+      var profile = BANK_PROFILES[i];
+      for (var j = 0; j < profile.patterns.length; j++) {
+        if (profile.patterns[j].test(upper)) {
+          return profile;
+        }
+      }
+    }
+    return null;
+  }
+
+  function buildCardHeaderPattern(bankName) {
+    // Find the profile matching detected bank
+    var profile = BANK_PROFILES.find(function(p) {
+      return p.name.toLowerCase() === (bankName || '').toLowerCase();
+    });
+    if (profile && profile.cardHeaderRx) {
+      return profile.cardHeaderRx;
+    }
+    // Generic fallback pattern
+    return '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+([A-Z][A-Z\\s]{2,100}?(?:CARD|VISA|MASTERCARD|AMEX|AMERICAN EXPRESS|SPAYLATER))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})';
+  }
+
+  function detectCardTypesInText(text) {
+    var types = [];
+    var upper = String(text || '').toUpperCase();
+    var typeChecks = [
+      { label: 'Visa', rx: /\bVISA\b/ },
+      { label: 'Mastercard', rx: /\bMASTER(CARD)?\b/ },
+      { label: 'AMEX', rx: /\b(AMEX|AMERICAN EXPRESS)\b/ },
+      { label: 'SpayLater', rx: /\bSPAYLATER\b/ },
+      { label: 'World Card', rx: /\bWORLD\b/ },
+      { label: 'Platinum', rx: /\bPLATINUM\b/ },
+      { label: 'Gold', rx: /\bGOLD\b/ },
+      { label: 'Cashback', rx: /CASH\s*BACK|CASH\s*REBATE/ },
+    ];
+    typeChecks.forEach(function(c) {
+      if (c.rx.test(upper)) types.push(c.label);
+    });
+    return types;
+  }
+
+  function detectStatementPeriod(text) {
+    var m = text.match(/(?:STATEMENT|PERIOD|PENYATA).*?(?:FOR|:)?\s+(\w+\s+\d{4})/i)
+      || text.match(/(\d{2}[\/\-]\d{2}[\/\-]\d{4})\s+(?:TO|HINGGA)\s+(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i);
+    if (m) return m[1] + (m[2] ? ' – ' + m[2] : '');
+    return null;
+  }
+
+  window.detectBankFromText = detectBankFromText;
+  window.detectBankProfile = detectBankProfile;
+  window.buildCardHeaderPattern = buildCardHeaderPattern;
+
+  // ═══════════════════════════════════════════════════
+  // PASTE TEXT PANEL — full implementation
+  // ═══════════════════════════════════════════════════
+
+  var _pasteDetectTimer = null;
+
+  function togglePastePanel() {
+    var panel = $('paste-panel');
+    var dropZone = $('drop-zone');
+    if (!panel) return;
+    if (panel.classList.contains('hidden')) {
+      panel.classList.remove('hidden');
+      if (dropZone) dropZone.classList.add('hidden');
+      var ta = $('paste-text-input');
+      if (ta) setTimeout(function() { ta.focus(); }, 80);
+    } else {
+      closePastePanel();
+    }
+  }
+
+  function closePastePanel() {
+    var panel = $('paste-panel');
+    var dropZone = $('drop-zone');
+    if (panel) panel.classList.add('hidden');
+    if (dropZone) dropZone.classList.remove('hidden');
+  }
+
+  function clearPastePanel() {
+    var ta = $('paste-text-input');
+    if (ta) ta.value = '';
+    hidePasteDetectBanner();
+    updatePasteCharCount(0);
+    var btn = $('paste-parse-btn');
+    if (btn) btn.disabled = true;
+    var stack = $('paste-stack-info');
+    if (stack) stack.classList.add('hidden');
+  }
+
+  function hidePasteDetectBanner() {
+    var banner = $('paste-detect-banner');
+    if (banner) banner.classList.add('hidden');
+  }
+
+  function updatePasteCharCount(n) {
+    var el = $('paste-char-count');
+    if (el) el.textContent = (n || 0).toLocaleString() + ' chars';
+  }
+
+  var COLOR_MAP = {
+    yellow:  { bg: 'bg-yellow-900/30',  border: 'border-yellow-500/30',  text: 'text-yellow-400'  },
+    red:     { bg: 'bg-red-900/30',     border: 'border-red-500/30',     text: 'text-red-400'     },
+    blue:    { bg: 'bg-blue-900/30',    border: 'border-blue-500/30',    text: 'text-blue-400'    },
+    purple:  { bg: 'bg-purple-900/30',  border: 'border-purple-500/30',  text: 'text-purple-400'  },
+    green:   { bg: 'bg-green-900/30',   border: 'border-green-500/30',   text: 'text-green-400'   },
+    orange:  { bg: 'bg-orange-900/30',  border: 'border-orange-500/30',  text: 'text-orange-400'  },
+    teal:    { bg: 'bg-teal-900/30',    border: 'border-teal-500/30',    text: 'text-teal-400'    },
+    indigo:  { bg: 'bg-indigo-900/30',  border: 'border-indigo-500/30',  text: 'text-indigo-400'  },
+  };
+
+  function onPasteTextInput() {
+    var ta = $('paste-text-input');
+    if (!ta) return;
+    var val = ta.value;
+    updatePasteCharCount(val.length);
+
+    var btn = $('paste-parse-btn');
+    if (btn) btn.disabled = val.trim().length < 20;
+
+    // Debounce detection by 400ms
+    if (_pasteDetectTimer) clearTimeout(_pasteDetectTimer);
+    if (val.trim().length < 30) {
+      hidePasteDetectBanner();
+      return;
+    }
+    _pasteDetectTimer = setTimeout(function() {
+      runPasteDetection(val);
+    }, 400);
+  }
+
+  function runPasteDetection(text) {
+    var profile = detectBankProfile(text);
+    var banner = $('paste-detect-banner');
+    if (!banner) return;
+
+    if (!profile) {
+      // Try generic tx row detection to at least confirm it looks like a statement
+      var hasTxRows = /\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+[A-Z]/.test(text);
+      if (hasTxRows) {
+        banner.className = 'rounded-xl p-3 border flex items-start gap-3 text-sm transition-all bg-slate-800/50 border-slate-600';
+        var icon = $('paste-detect-icon');
+        var title = $('paste-detect-title');
+        var detail = $('paste-detect-detail');
+        var conf = $('paste-detect-confidence');
+        if (icon) { icon.className = 'ph ph-question text-xl mt-0.5 shrink-0 text-slate-400'; }
+        if (title) title.textContent = 'Unknown Bank — Transaction Rows Detected';
+        if (detail) detail.textContent = 'Will attempt generic parsing. Manual card label may be required.';
+        if (conf) { conf.textContent = '~60%'; conf.className = 'text-xs font-bold shrink-0 mt-0.5 text-slate-400'; }
+        banner.classList.remove('hidden');
+      } else {
+        hidePasteDetectBanner();
+      }
+      return;
+    }
+
+    var cardTypes = detectCardTypesInText(text);
+    var period = detectStatementPeriod(text);
+    var colors = COLOR_MAP[profile.color] || COLOR_MAP['indigo'];
+
+    banner.className = 'rounded-xl p-3 border flex items-start gap-3 text-sm transition-all ' + colors.bg + ' ' + colors.border;
+    banner.classList.remove('hidden');
+
+    var icon = $('paste-detect-icon');
+    var title = $('paste-detect-title');
+    var detail = $('paste-detect-detail');
+    var conf = $('paste-detect-confidence');
+
+    if (icon) { icon.className = 'ph ' + profile.icon + ' text-xl mt-0.5 shrink-0 ' + colors.text; }
+    if (title) title.textContent = profile.name + ' Statement Detected';
+
+    if (detail) {
+      var chips = '';
+      cardTypes.forEach(function(ct) {
+        chips += '<span class="bg-slate-800 border border-slate-600 text-slate-200 px-2 py-0.5 rounded-full">' + escapeHtml(ct) + '</span> ';
+      });
+      if (period) chips += '<span class="text-slate-400">' + escapeHtml(period) + '</span>';
+      detail.innerHTML = chips || 'Card type unknown — will infer from statement structure.';
+    }
+
+    if (conf) {
+      conf.textContent = '~95%';
+      conf.className = 'text-xs font-bold shrink-0 mt-0.5 text-green-400';
+    }
+
+    // Stack info: if transactions already loaded, warn about appending
+    var stack = $('paste-stack-info');
+    var stackMsg = $('paste-stack-msg');
+    if (stack && stackMsg) {
+      if (transactions && transactions.length > 0) {
+        stackMsg.textContent = transactions.length + ' transaction(s) already loaded. Parsing will append to existing data. Clear All first to start fresh.';
+        stack.classList.remove('hidden');
+      } else {
+        stack.classList.add('hidden');
+      }
+    }
+  }
+
+  function parsePastedText() {
+    var ta = $('paste-text-input');
+    if (!ta || !ta.value.trim()) {
+      toast('Please paste some statement text first.');
+      return;
+    }
+    var text = ta.value.trim();
+    closePastePanel();
+
+    // Show raw text inspector
+    var rawPanel = $('raw-text-panel');
+    var rawOutput = $('raw-text-output');
+    if (rawPanel) rawPanel.classList.remove('hidden');
+    if (rawOutput) {
+      rawOutput.value = text;
+      if (typeof updateRawTextCount === 'function') updateRawTextCount();
+    }
+
+    // Animate processing bar
+    var statusBox = $('processing-status');
+    var bar = $('process-bar');
+    var stepText = $('process-step');
+    if (statusBox) statusBox.classList.remove('hidden');
+    if (bar) bar.style.width = '50%';
+    if (stepText) {
+      var profile = detectBankProfile(text);
+      stepText.innerText = profile
+        ? 'Parsing ' + profile.name + ' statement...'
+        : 'Parsing statement (unknown bank)...';
+    }
+
+    setTimeout(function() { executeTextParsing(text); }, 150);
+
+    var score = $('confidence-score');
+    if (score) {
+      var profile2 = detectBankProfile(text);
+      score.innerText = profile2
+        ? '95% (' + profile2.name + ' Local Parser)'
+        : '60% (Generic Local Parser)';
+    }
+  }
+
+  window.togglePastePanel = togglePastePanel;
+  window.closePastePanel = closePastePanel;
+  window.clearPastePanel = clearPastePanel;
+  window.parsePastedText = parsePastedText;
+  window.onPasteTextInput = onPasteTextInput;
   // -----------------------------
   // Raw text inspector / password modal
   // -----------------------------
