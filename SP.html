@@ -214,6 +214,7 @@
     <textarea
       id="raw-text-output"
       readonly
+      oninput="updateRawTextCount()"
       class="w-full h-72 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-emerald-400 focus:outline-none focus:border-slate-700 no-scrollbar"
     ></textarea>
   </div>
@@ -295,7 +296,6 @@
     </button>
   </div>
 </div>
-                </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="glass-panel p-4 rounded-2xl border border-slate-700">
@@ -1226,6 +1226,7 @@ function resetPeriodFilter() {
 
         if (rawPanel) rawPanel.classList.remove('hidden');
         if (rawOutput) rawOutput.value = extractedText;
+        if (typeof updateRawTextCount === 'function') updateRawTextCount();
 
         if (bar) bar.style.width = '90%';
         if (stepText) {
@@ -1477,7 +1478,7 @@ function parseTransactionsInBlock(blockText, cardInfo) {
 
 const lines = String(blockText || '')
   .replace(/\r/g, '\n')
-  .replace(/\s+(?=\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+)/g, '\n')
+  .replace(/(?<!\d)(?=\d{2}\/\d{2}\s+\d{2}\/\d{2}\s+[A-Z])/g, '\n')
   .split('\n')
     .map(line => line.replace(/[ \t]+/g, ' ').trim())
     .filter(Boolean);
@@ -1934,7 +1935,11 @@ function reparseRawTextFromPanel() {
 
   executeTextParsing(raw.value);
 }
-    
+
+  window.updateRawTextCount = updateRawTextCount;
+  window.copyRawText = copyRawText;
+  window.downloadRawText = downloadRawText;
+  window.reparseRawTextFromPanel = reparseRawTextFromPanel;
   // -----------------------------
   // Raw text inspector / password modal
   // -----------------------------
@@ -2565,7 +2570,7 @@ function reparseRawTextFromPanel() {
           }
         },
         onClick: function (event, elements) {
-          var search = $('search-input');
+          var search = document.getElementById('search-input');
 
           if (elements.length > 0) {
             var index = elements[0].index;
