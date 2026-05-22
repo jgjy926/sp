@@ -557,1164 +557,1756 @@
         </div>
     </div>
 
-    <script>
-        // --- State Management ---
-        let currentTab = 'console';
-        let chartInstance = null;
-        
-        let sessionSettings = {
-            cfUrl: '',
-            useAI: false,
-            aiModel: 'gemini-2.5-flash'
-        };
+   <script>
+/**
+ * Zero-Cost Statement Parser - Rescue / Replacement Runtime
+ * Paste this block immediately before </body>.
+ * It restores navigation and replaces the parser logic with Maybank card-section enrichment.
+ */
 
-        // Mutable category state allowing auto-learning from LLM
-        let appCategories = [
-            "Food & Beverage", "Beauty & Wellness", "Shopping & Retail", 
-            "Travel & Transportation", "Utilities & Insurance", "Uncategorized"
-        ];
+(function () {
+  'use strict';
 
-        let selectedFileBuffer = null;
-        let selectedFileName = '';
+  // -----------------------------
+  // State
+  // -----------------------------
+  var currentTab = 'console';
+  var chartInstance = null;
 
-        // Empty state arrays
-        let rules = [];
-        let transactions = [];
-        let cashbacks = [];
+  var sessionSettings = {
+    cfUrl: '',
+    useAI: false,
+    aiModel: 'gemini-2.5-flash'
+  };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Dropzone logic
-            document.getElementById('drop-zone').addEventListener('click', () => {
-                document.getElementById('file-input').click();
-            });
+  var appCategories = [
+    'Food & Beverage',
+    'Beauty & Wellness',
+    'Shopping & Retail',
+    'Travel & Transportation',
+    'Utilities & Insurance',
+    'Groceries',
+    'Pharmacy & Healthcare',
+    'Installment / Financing',
+    'Uncategorized'
+  ];
 
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                document.getElementById('drop-zone').addEventListener(eventName, preventDefaults, false);
-            });
+  var selectedFileBuffer = null;
+  var selectedFileName = '';
 
-            document.getElementById('drop-zone').addEventListener('drop', handleDrop, false);
+  var rules = [];
+  var transactions = [];
+  var cashbacks = [];
 
-            renderCategories(); 
-            renderAll();
-        });
+  // Expose state for console debugging if needed
+  window.__statementParserState = {
+    get currentTab() { return currentTab; },
+    get transactions() { return transactions; },
+    get cashbacks() { return cashbacks; },
+    get rules() { return rules; },
+    get appCategories() { return appCategories; }
+  };
 
-        function preventDefaults (e) { e.preventDefault(); e.stopPropagation(); }
+  // -----------------------------
+  // Safe helpers
+  // -----------------------------
+  function $(id) {
+    return document.getElementById(id);
+  }
 
-        // --- Category Management ---
-        function renderCategories() {
-            const chipContainer = document.getElementById('category-chips-container');
-            if(chipContainer) {
-                chipContainer.innerHTML = appCategories.map(cat => 
-                    `<span class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-2 group transition-colors hover:border-slate-500">
-                        ${cat}
-                        ${cat !== 'Uncategorized' ? `<button onclick="deleteCategory('${cat}')" class="text-slate-500 hover:text-red-400 opacity-0 md:opacity-0 group-hover:opacity-100 transition-opacity"><i class="ph ph-x"></i></button>` : ''}
-                    </span>`
-                ).join('');
-                
-                chipContainer.innerHTML += `
-                    <button onclick="promptAddCategory()" class="px-3 py-1.5 rounded-lg text-xs border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-300 transition-colors flex items-center gap-1">
-                        <i class="ph ph-plus"></i> Add New
-                    </button>
-                `;
-            }
+  function safeText(value, fallback) {
+    if (value === null || value === undefined || value === '') {
+      return fallback || '';
+    }
+    return String(value);
+  }
 
-            const optionsHtml = appCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
-            const editCat = document.getElementById('edit-category');
-            const ruleCat = document.getElementById('rule-category');
-            if(editCat) editCat.innerHTML = optionsHtml;
-            if(ruleCat) ruleCat.innerHTML = optionsHtml;
-        }
+  function money(value) {
+    var n = parseFloat(value || 0);
+    if (!isFinite(n)) n = 0;
+    return n.toFixed(2);
+  }
 
-        function promptAddCategory() {
-            const newCat = prompt("Enter new category name:");
-            if (newCat && newCat.trim() !== '') {
-                const cleanCat = newCat.trim();
-                if (!appCategories.includes(cleanCat)) {
-                    appCategories.push(cleanCat);
-                    renderCategories();
-                    showMessage(`Category '${cleanCat}' added successfully.`);
-                } else {
-                    showMessage("Category already exists.");
-                }
-            }
-        }
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
-        function deleteCategory(catToRemove) {
-            if(catToRemove === 'Uncategorized') return;
-            if(confirm(`Are you sure you want to delete '${catToRemove}'? Existing transactions will become 'Uncategorized'.`)) {
-                appCategories = appCategories.filter(c => c !== catToRemove);
-                
-                transactions.forEach(t => { if(t.category === catToRemove) t.category = 'Uncategorized'; });
-                rules.forEach(r => { if(r.category === catToRemove) r.category = 'Uncategorized'; });
-                
-                renderCategories();
-                renderAll();
-                if(currentTab === 'analytics') initChart();
-                showMessage(`Category deleted.`);
-            }
-        }
+  function toast(msg) {
+    var old = document.querySelectorAll('.sp-runtime-toast');
+    old.forEach(function (x) { x.remove(); });
 
-        // --- Navigation ---
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(el => { el.classList.remove('text-white', 'bg-slate-800'); el.classList.add('text-slate-400'); });
-            document.querySelectorAll('nav.md\\:hidden button').forEach(el => { el.classList.remove('text-white'); el.classList.add('text-slate-400'); });
+    var div = document.createElement('div');
+    div.className = 'sp-runtime-toast fixed bottom-20 md:bottom-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg border border-slate-700 z-50 text-sm';
+    div.innerText = msg;
+    document.body.appendChild(div);
 
-            document.getElementById('tab-' + tabId).classList.add('active');
-            
-            const deskBtn = document.getElementById('nav-desktop-' + tabId);
-            if(deskBtn) { deskBtn.classList.add('text-white', 'bg-slate-800'); deskBtn.classList.remove('text-slate-400'); }
-            
-            const mobBtn = document.getElementById('nav-mobile-' + tabId);
-            if(mobBtn) { mobBtn.classList.add('text-white'); mobBtn.classList.remove('text-slate-400'); }
+    setTimeout(function () {
+      div.style.opacity = '0';
+      div.style.transition = 'opacity 0.3s';
+      setTimeout(function () {
+        if (div.parentNode) div.parentNode.removeChild(div);
+      }, 300);
+    }, 3000);
+  }
 
-            currentTab = tabId;
-            document.getElementById('main-scroll-area').scrollTop = 0;
+  window.showMessage = toast;
 
-            if(tabId === 'analytics') {
-                setTimeout(initChart, 100);
-            }
-        }
+  // -----------------------------
+  // Boot
+  // -----------------------------
+  function boot() {
+    injectCardInfoField();
+    bindDropZone();
+    loadSetupIntoForm();
+    renderCategories();
+    renderAll();
 
-        function testSandbox() {
-            const input = document.getElementById('sandbox-input').value.trim();
-            const out = document.getElementById('sandbox-output');
-            
-            if(!input) {
-                out.innerText = "Type raw text or category to test mapping...";
-                out.className = "text-slate-300 font-mono italic";
-                return;
-            }
+    // If page starts with console active, keep it consistent
+    switchTab('console');
+  }
 
-            const parsed = runRuleEngineOnText(input);
-            if(parsed.ruleMatched) {
-                out.innerHTML = `
-                    <span class="text-green-400 font-bold">Rule Match Found:</span><br>
-                    Mapped: <strong class="text-white">${parsed.mappedMerchant}</strong><br>
-                    Category: <strong class="text-indigo-400">${parsed.category}</strong>
-                `;
-                out.className = "text-slate-200 font-mono";
-            } else {
-                out.innerHTML = `<span class="text-slate-500 italic">No exact rule match. Will default parsing profile.</span>`;
-                out.className = "text-slate-500 font-mono";
-            }
-        }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 
-        // Simplified Rule Engine: Only handles Category & Naming overrides
-       
-function runRuleEngineOnText(rawDesc, explicitCategory = '') {
-  const upperText = (rawDesc || '').toUpperCase();
-  const upperCat = (explicitCategory || '').toUpperCase();
+  function bindDropZone() {
+    var dropZone = $('drop-zone');
+    var fileInput = $('file-input');
 
-  for (let rule of rules) {
-    const trigger = (rule.trigger || '').toUpperCase();
+    if (dropZone && fileInput && !dropZone.__spBound) {
+      dropZone.__spBound = true;
 
-    // ✅ FIX: proper boolean operator
-    if (upperText.includes(trigger) || (upperCat && upperCat === trigger)) {
-      return {
-        ruleMatched: true,
-        mappedMerchant: rule.mappedMerchant,
-        category: rule.category
-      };
+      dropZone.addEventListener('click', function () {
+        fileInput.click();
+      });
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function (eventName) {
+        dropZone.addEventListener(eventName, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }, false);
+      });
+
+      dropZone.addEventListener('drop', function (e) {
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files.length) initPdfLoad(files[0]);
+      }, false);
     }
   }
 
-  return {
-    ruleMatched: false,
-    mappedMerchant: rawDesc,
-    // ✅ FIX: proper fallback operator
-    category: explicitCategory || 'Uncategorized'
-  };
-}
+  function loadSetupIntoForm() {
+    var cf = $('cf-url');
+    var ai = $('use-ai-toggle');
+    var model = $('ai-model-select');
 
-        // --- Secure PDF Text Extraction Pipeline ---
-        function handleFileSelect(e) {
-            const files = e.target.files;
-            if(files.length) initPdfLoad(files[0]);
+    if (cf) cf.value = sessionSettings.cfUrl || '';
+    if (ai) ai.checked = !!sessionSettings.useAI;
+    if (model) model.value = sessionSettings.aiModel || 'gemini-2.5-flash';
+  }
+
+  // -----------------------------
+  // Navigation
+  // -----------------------------
+  function switchTab(tabId) {
+    currentTab = tabId;
+
+    document.querySelectorAll('.tab-content').forEach(function (el) {
+      el.classList.remove('active');
+    });
+
+    var activeSection = $('tab-' + tabId);
+    if (activeSection) activeSection.classList.add('active');
+
+    document.querySelectorAll('.nav-btn').forEach(function (el) {
+      el.classList.remove('text-white', 'bg-slate-800');
+      el.classList.add('text-slate-400');
+    });
+
+    document.querySelectorAll('nav.md\\:hidden button').forEach(function (el) {
+      el.classList.remove('text-white');
+      el.classList.add('text-slate-400');
+    });
+
+    var deskBtn = $('nav-desktop-' + tabId);
+    if (deskBtn) {
+      deskBtn.classList.add('text-white', 'bg-slate-800');
+      deskBtn.classList.remove('text-slate-400');
+    }
+
+    var mobBtn = $('nav-mobile-' + tabId);
+    if (mobBtn) {
+      mobBtn.classList.add('text-white');
+      mobBtn.classList.remove('text-slate-400');
+    }
+
+    var scroll = $('main-scroll-area');
+    if (scroll) scroll.scrollTop = 0;
+
+    if (tabId === 'analytics') {
+      setTimeout(initChart, 80);
+    }
+  }
+
+  window.switchTab = switchTab;
+
+  // -----------------------------
+  // Category manager
+  // -----------------------------
+  function renderCategories() {
+    var chipContainer = $('category-chips-container');
+
+    if (chipContainer) {
+      chipContainer.innerHTML = appCategories.map(function (cat) {
+        var deleteBtn = '';
+        if (cat !== 'Uncategorized') {
+          deleteBtn =
+            '<button onclick="deleteCategory(\'' + escapeHtml(cat).replace(/'/g, "\\'") + '\')" class="text-slate-500 hover:text-red-400 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">' +
+            '<i class="ph ph-x"></i>' +
+            '</button>';
         }
 
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if(files.length) initPdfLoad(files[0]);
+        return '' +
+          '<span class="px-3 py-1.5 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-2 group transition-colors hover:border-slate-500">' +
+          escapeHtml(cat) +
+          deleteBtn +
+          '</span>';
+      }).join('');
+
+      chipContainer.innerHTML +=
+        '<button onclick="promptAddCategory()" class="px-3 py-1.5 rounded-lg text-xs border border-dashed border-slate-500 text-slate-400 hover:text-white hover:border-slate-300 transition-colors flex items-center gap-1">' +
+        '<i class="ph ph-plus"></i> Add New' +
+        '</button>';
+    }
+
+    var optionsHtml = appCategories.map(function (cat) {
+      return '<option value="' + escapeHtml(cat) + '">' + escapeHtml(cat) + '</option>';
+    }).join('');
+
+    var editCat = $('edit-category');
+    var ruleCat = $('rule-category');
+
+    if (editCat) editCat.innerHTML = optionsHtml;
+    if (ruleCat) ruleCat.innerHTML = optionsHtml;
+  }
+
+  function promptAddCategory() {
+    var newCat = prompt('Enter new category name:');
+    if (!newCat || !newCat.trim()) return;
+
+    var cleanCat = newCat.trim();
+
+    if (appCategories.indexOf(cleanCat) === -1) {
+      appCategories.push(cleanCat);
+      renderCategories();
+      toast("Category '" + cleanCat + "' added.");
+    } else {
+      toast('Category already exists.');
+    }
+  }
+
+  function deleteCategory(catToRemove) {
+    if (catToRemove === 'Uncategorized') return;
+
+    if (!confirm("Delete category '" + catToRemove + "'? Existing transactions will become Uncategorized.")) {
+      return;
+    }
+
+    appCategories = appCategories.filter(function (c) { return c !== catToRemove; });
+
+    transactions.forEach(function (t) {
+      if (t.category === catToRemove) t.category = 'Uncategorized';
+    });
+
+    rules.forEach(function (r) {
+      if (r.category === catToRemove) r.category = 'Uncategorized';
+    });
+
+    renderCategories();
+    renderAll();
+    if (currentTab === 'analytics') initChart();
+    toast('Category deleted.');
+  }
+
+  window.promptAddCategory = promptAddCategory;
+  window.deleteCategory = deleteCategory;
+
+  // -----------------------------
+  // Rule engine
+  // -----------------------------
+  function runRuleEngineOnText(rawDesc, explicitCategory) {
+    rawDesc = rawDesc || '';
+    explicitCategory = explicitCategory || '';
+
+    var upperText = rawDesc.toUpperCase();
+    var upperCat = explicitCategory.toUpperCase();
+
+    for (var i = 0; i < rules.length; i++) {
+      var rule = rules[i];
+      var trigger = String(rule.trigger || '').toUpperCase();
+
+      if (!trigger) continue;
+
+      if (upperText.indexOf(trigger) !== -1 || (upperCat && upperCat === trigger)) {
+        return {
+          ruleMatched: true,
+          mappedMerchant: rule.mappedMerchant,
+          category: rule.category
+        };
+      }
+    }
+
+    return {
+      ruleMatched: false,
+      mappedMerchant: rawDesc,
+      category: explicitCategory || autoCategory(rawDesc)
+    };
+  }
+
+  function autoCategory(desc) {
+    var d = String(desc || '').toUpperCase();
+
+    if (/JAYA GROCER|AEON CO|AEON MALL|POPULAR|MYNEWS|MR DIY|PARKSON|MACHINES|THE ORDINARY/.test(d)) {
+      return 'Shopping & Retail';
+    }
+
+    if (/PHO VIETZ|KIM GARY|BOOST JUICE|GROCER/.test(d)) {
+      return 'Food & Beverage';
+    }
+
+    if (/GUARDIAN|WATSON|SPECS|OPTICS|MUSEE/.test(d)) {
+      return 'Beauty & Wellness';
+    }
+
+    if (/BALANCE TRANSFER|SPAYLATER|INSTALMENT|INSTALLMENT/.test(d)) {
+      return 'Installment / Financing';
+    }
+
+    return 'Uncategorized';
+  }
+
+  window.runRuleEngineOnText = runRuleEngineOnText;
+
+  // -----------------------------
+  // File loading / PDF extraction
+  // -----------------------------
+  function handleFileSelect(e) {
+    var files = e.target.files;
+    if (files && files.length) initPdfLoad(files[0]);
+  }
+
+  function initPdfLoad(file) {
+    if (!file || file.type !== 'application/pdf') {
+      toast('Please upload a valid PDF file.');
+      return;
+    }
+
+    selectedFileName = file.name;
+
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      selectedFileBuffer = ev.target.result;
+      tryUnlockAndLoadPDF('');
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function tryUnlockAndLoadPDF(password) {
+    password = password || '';
+
+    if (!selectedFileBuffer) return;
+
+    var dropZone = $('drop-zone');
+    var statusBox = $('processing-status');
+    var bar = $('process-bar');
+    var stepText = $('process-step');
+
+    if (dropZone) dropZone.classList.add('hidden');
+    if (statusBox) statusBox.classList.remove('hidden');
+    if (bar) bar.style.width = '20%';
+    if (stepText) stepText.innerText = 'Opening PDF securely...';
+
+    if (typeof pdfjsLib === 'undefined') {
+      toast('PDF.js library not loaded.');
+      if (statusBox) statusBox.classList.add('hidden');
+      if (dropZone) dropZone.classList.remove('hidden');
+      return;
+    }
+
+    var bufferCopy = selectedFileBuffer.slice(0);
+    var loadingTask = pdfjsLib.getDocument({ data: bufferCopy, password: password });
+
+    loadingTask.promise.then(async function (pdf) {
+      if (bar) bar.style.width = '50%';
+      if (stepText) stepText.innerText = 'Extracting text with layout-aware reconstruction...';
+
+      try {
+        var extractedText = '';
+
+        for (var i = 1; i <= pdf.numPages; i++) {
+          var page = await pdf.getPage(i);
+
+          var textContent = await page.getTextContent({
+            disableCombineTextItems: false,
+            includeMarkedContent: false
+          });
+
+          extractedText += reconstructPageText(textContent.items) + '\n';
+
+          if (bar) {
+            var subProgress = 50 + Math.round((i / pdf.numPages) * 30);
+            bar.style.width = subProgress + '%';
+          }
         }
 
-        function initPdfLoad(file) {
-            if(file.type !== 'application/pdf') {
-                showMessage("Please upload a valid PDF file.");
-                return;
-            }
-            
-            selectedFileName = file.name;
-            const reader = new FileReader();
-            reader.onload = function(ev) {
-                selectedFileBuffer = ev.target.result;
-                tryUnlockAndLoadPDF('');
-            };
-            reader.readAsArrayBuffer(file);
+        var rawPanel = $('raw-text-panel');
+        var rawOutput = $('raw-text-output');
+
+        if (rawPanel) rawPanel.classList.remove('hidden');
+        if (rawOutput) rawOutput.value = extractedText;
+
+        if (bar) bar.style.width = '90%';
+        if (stepText) {
+          stepText.innerText = sessionSettings.cfUrl
+            ? 'Parsing with hybrid local card mapping...'
+            : 'Parsing locally with Maybank card mapping...';
         }
 
-        function tryUnlockAndLoadPDF(password = '') {
-            if (!selectedFileBuffer) return;
+        setTimeout(function () {
+          executeTextParsing(extractedText);
+        }, 200);
+      } catch (err) {
+        if (statusBox) statusBox.classList.add('hidden');
+        if (dropZone) dropZone.classList.remove('hidden');
+        toast('Error extracting text: ' + err.message);
+      }
+    }).catch(function (error) {
+      if (statusBox) statusBox.classList.add('hidden');
 
-            document.getElementById('drop-zone').classList.add('hidden');
-            const statusBox = document.getElementById('processing-status');
-            statusBox.classList.remove('hidden');
-            
-            const bar = document.getElementById('process-bar');
-            const stepText = document.getElementById('process-step');
-            bar.style.width = '20%';
-            stepText.innerText = "Opening PDF securely...";
+      if (error && (error.name === 'PasswordException' || String(error.message || '').toLowerCase().indexOf('password') !== -1)) {
+        var modal = $('password-modal');
+        if (modal) modal.classList.remove('hidden');
+      } else {
+        if (dropZone) dropZone.classList.remove('hidden');
+        toast('Failed to load PDF: ' + (error && error.message ? error.message : 'Unknown error'));
+      }
+    });
+  }
 
-            const bufferCopy = selectedFileBuffer.slice(0);
-            const loadingTask = pdfjsLib.getDocument({ data: bufferCopy, password: password });
-            
-            loadingTask.promise.then(async (pdf) => {
-                bar.style.width = '50%';
-                stepText.innerText = "Extracting statement text...";
-                
-                try {
-                    let extractedText = '';
-                    const totalPages = pdf.numPages;
-                    
-                    for (let i = 1; i <= totalPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        extractedText += pageText + '\n';
-                        
-                        const subProgress = 50 + Math.round((i / totalPages) * 30);
-                        bar.style.width = `${subProgress}%`;
-                    }
-                    
-                    document.getElementById('raw-text-panel').classList.remove('hidden');
-                    document.getElementById('raw-text-output').value = extractedText;
+  /**
+   * Rebuild page text using y/x coordinates.
+   * This is more reliable than joining all text fragments with spaces.
+   */
+  function reconstructPageText(items) {
+    var tolerance = 2;
+    var rows = [];
 
-                    bar.style.width = '90%';
-                    stepText.innerText = sessionSettings.cfUrl ? "Routing proxy content payload..." : "Parsing matches via Regex...";
-                    
-                    setTimeout(() => {
-                        executeTextParsing(extractedText);
-                    }, 400);
+    (items || []).forEach(function (item) {
+      var str = item.str || '';
+      if (!str.trim()) return;
 
-                } catch (err) {
-                    statusBox.classList.add('hidden');
-                    document.getElementById('drop-zone').classList.remove('hidden');
-                    showMessage("Error extracting text: " + err.message);
-                }
-                
-            }).catch((error) => {
-                statusBox.classList.add('hidden');
-                if (error.name === 'PasswordException' || error.message.includes('password')) {
-                    document.getElementById('password-modal').classList.remove('hidden');
-                } else {
-                    document.getElementById('drop-zone').classList.remove('hidden');
-                    showMessage("Failed to load PDF: " + error.message);
-                }
+      var tr = item.transform || [0, 0, 0, 0, 0, 0];
+      var x = tr[4] || 0;
+      var y = tr[5] || 0;
+
+      var row = null;
+
+      for (var i = 0; i < rows.length; i++) {
+        if (Math.abs(rows[i].y - y) <= tolerance) {
+          row = rows[i];
+          break;
+        }
+      }
+
+      if (!row) {
+        row = { y: y, items: [] };
+        rows.push(row);
+      }
+
+      row.items.push({
+        x: x,
+        str: str
+      });
+    });
+
+    rows.sort(function (a, b) {
+      return b.y - a.y;
+    });
+
+    return rows.map(function (row) {
+      row.items.sort(function (a, b) {
+        return a.x - b.x;
+      });
+
+      return row.items.map(function (x) {
+        return x.str;
+      }).join(' ').replace(/[ \t]+/g, ' ').trim();
+    }).filter(Boolean).join('\n');
+  }
+
+  function executeTextParsing(rawText) {
+    var statusBox = $('processing-status');
+    var bar = $('process-bar');
+
+    if (sessionSettings.cfUrl) {
+      fetch(sessionSettings.cfUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'parse',
+          documentText: rawText,
+          useAI: sessionSettings.useAI,
+          aiModel: sessionSettings.aiModel,
+          existingCategories: appCategories
+        })
+      }).then(function (response) {
+        if (!response.ok) throw new Error('Worker responded with error status');
+        return response.json();
+      }).then(function (result) {
+        if (result.transactions && Array.isArray(result.transactions)) {
+          parseSourcedTransactions(JSON.stringify(result.transactions), rawText);
+        } else if (result.data) {
+          parseSourcedTransactions(result.data, rawText);
+        } else {
+          parseLocalTextRegex(rawText);
+        }
+
+        var score = $('confidence-score');
+        if (score) score.innerText = sessionSettings.useAI ? '99% (Hybrid AI + Local Card Map)' : '96% (Worker + Local Card Map)';
+        toast('Hybrid parse completed.');
+        finishParsingUi(statusBox, bar);
+      }).catch(function (err) {
+        toast('Worker error: ' + err.message + '. Falling back to local parser.');
+        parseLocalTextRegex(rawText);
+
+        var score = $('confidence-score');
+        if (score) score.innerText = '95% (Local Maybank Parser)';
+
+        finishParsingUi(statusBox, bar);
+      });
+    } else {
+      parseLocalTextRegex(rawText);
+
+      var score2 = $('confidence-score');
+      if (score2) score2.innerText = '95% (Local Maybank Parser)';
+
+      finishParsingUi(statusBox, bar);
+    }
+  }
+
+  function finishParsingUi(statusBox, bar) {
+    if (bar) bar.style.width = '100%';
+
+    setTimeout(function () {
+      if (statusBox) statusBox.classList.add('hidden');
+
+      var resultPanel = $('extraction-results');
+      if (resultPanel) resultPanel.classList.remove('hidden');
+
+      var title = $('parsed-summary-title');
+      if (title) title.innerText = selectedFileName ? 'Extracted from: ' + selectedFileName : 'Extracted Transactions';
+
+      renderAll();
+
+      setTimeout(function () {
+        switchTab('analytics');
+      }, 600);
+    }, 300);
+  }
+
+  window.handleFileSelect = handleFileSelect;
+  window.initPdfLoad = initPdfLoad;
+  window.tryUnlockAndLoadPDF = tryUnlockAndLoadPDF;
+  window.executeTextParsing = executeTextParsing;
+
+  // -----------------------------
+  // Maybank local structure parser
+  // -----------------------------
+  function extractLocalStructure(text) {
+    var structuralTx = [];
+    var structuralCb = [];
+    var cardsFound = new Set();
+
+    var normalized = String(text || '')
+      .replace(/\r/g, '\n')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n+/g, '\n');
+
+    var globalBankName = 'Unidentified Bank';
+
+    var bankMatch = normalized.match(
+      /(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i
+    );
+
+    if (bankMatch) {
+      globalBankName = bankMatch[1];
+    }
+
+    function cleanCardDigits(cardText) {
+      return String(cardText || '').replace(/\D/g, '');
+    }
+
+    function maskCard(cardText) {
+      var digits = cleanCardDigits(cardText);
+      if (digits.length < 4) return 'No Card #';
+      return '**** ' + digits.slice(-4);
+    }
+
+    function normalizeProduct(productText) {
+      return String(productText || '')
+        .replace(/\s+/g, ' ')
+        .replace(/\bMAYBANK\b/i, '')
+        .trim();
+    }
+
+    function buildCardInfo(productText, cardText) {
+      var product = normalizeProduct(productText);
+      var masked = maskCard(cardText);
+
+      if (product) {
+        return (globalBankName + ' ' + product + ' ' + masked).replace(/\s+/g, ' ').trim();
+      }
+
+      return (globalBankName + ' ' + masked).replace(/\s+/g, ' ').trim();
+    }
+
+    /**
+     * Maybank card-section headers:
+     * NAME MAYBANK PRODUCT CARD : 1234 5678 9012 3456
+     * NAME MAYBANK PRODUCT AMEX : 3791 861396 97262
+     */
+    var sectionRegex =
+      /([A-Z][A-Z\s.'-]{2,80}?)\s+(MAYBANK\s+(?:(?!YOUR COMBINED|KOMBINASI|Posting Date|TOTAL CREDIT|TOTAL DEBIT).){2,100}?(?:CARD|AMEX))\s*:\s*((?:\d[\s-]?){12,19})/gi;
+
+    var sections = [];
+    var sectionMatch;
+
+    while ((sectionMatch = sectionRegex.exec(normalized)) !== null) {
+      var cardDigits = cleanCardDigits(sectionMatch[3]);
+
+      if (cardDigits.length >= 12 && cardDigits.length <= 19) {
+        var cardInfo = buildCardInfo(sectionMatch[2], sectionMatch[3]);
+
+        sections.push({
+          index: sectionMatch.index,
+          owner: sectionMatch[1].trim(),
+          product: normalizeProduct(sectionMatch[2]),
+          cardDigits: cardDigits,
+          cardInfo: cardInfo
+        });
+
+        cardsFound.add(cardInfo);
+      }
+    }
+
+    var txRegex =
+      /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})\s+(.+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2})(?:CR)?)(?=\s+(?:\d{2}\/\d{2}\s+\d{2}\/\d{2}|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|YOUR COMBINED|KOMBINASI|Posting Date|Page\/|005\s+STATEMENT|STATEMENT OF CREDIT CARD ACCOUNT|$))/gi;
+
+    function parseTransactionsInBlock(blockText, cardInfo) {
+      txRegex.lastIndex = 0;
+
+      var txMatch;
+
+      while ((txMatch = txRegex.exec(blockText)) !== null) {
+        var postDate = txMatch[1];
+        var transDate = txMatch[2];
+        var rawDesc = txMatch[3].replace(/\s+/g, ' ').trim().toUpperCase();
+        var rawAmount = txMatch[4];
+
+        var isCredit = /CR$/i.test(rawAmount);
+        var amount = parseFloat(rawAmount.replace(/CR$/i, '').replace(/,/g, ''));
+
+        if (!amount || amount <= 0) continue;
+
+        if (rawDesc.indexOf('PYMT@') !== -1 || rawDesc.indexOf('PAYMENT') !== -1) {
+          continue;
+        }
+
+        if (
+          rawDesc.indexOf('TOTAL') !== -1 ||
+          rawDesc.indexOf('SUB TOTAL') !== -1 ||
+          rawDesc.indexOf('JUMLAH') !== -1 ||
+          rawDesc.indexOf('RETAIL INTEREST RATE') !== -1
+        ) {
+          continue;
+        }
+
+        var isCashback =
+          rawDesc.indexOf('CASH REBATE') !== -1 ||
+          rawDesc.indexOf('CASH BACK') !== -1 ||
+          rawDesc.indexOf('CASHBACK') !== -1 ||
+          rawDesc.indexOf('REBATE') !== -1;
+
+        if (isCashback || isCredit) {
+          if (isCashback) {
+            structuralCb.push({
+              cardInfo: cardInfo,
+              date: postDate,
+              amount: amount,
+              rawDesc: rawDesc
             });
+          }
+        } else {
+          structuralTx.push({
+            postDate: postDate,
+            transDate: transDate,
+            cardInfo: cardInfo,
+            amount: amount,
+            rawDesc: rawDesc
+          });
+        }
+      }
+    }
+
+    if (sections.length > 0) {
+      sections.forEach(function (section, idx) {
+        var start = section.index;
+        var end = idx + 1 < sections.length ? sections[idx + 1].index : normalized.length;
+        var blockText = normalized.slice(start, end);
+
+        parseTransactionsInBlock(blockText, section.cardInfo);
+      });
+    } else {
+      var fallbackCardInfo = globalBankName + ' Pending Card Assignment';
+      parseTransactionsInBlock(normalized, fallbackCardInfo);
+    }
+
+    return {
+      structuralTx: structuralTx,
+      structuralCb: structuralCb,
+      cardsFound: cardsFound,
+      globalBankName: globalBankName
+    };
+  }
+
+  window.extractLocalStructure = extractLocalStructure;
+
+  function enrichMissingCardInfo(items, defaultBankName) {
+    defaultBankName = defaultBankName || 'Unknown Bank';
+
+    var hasMissingCard = items.some(function (t) {
+      return !t.cardInfo ||
+        t.cardInfo.indexOf('No Card #') !== -1 ||
+        t.cardInfo.indexOf('Pending Card Assignment') !== -1;
+    });
+
+    if (!hasMissingCard) return items;
+
+    var label = prompt(
+      'Card number was not found in the PDF text. Enter a card label for this import:',
+      defaultBankName + ' Unknown Card'
+    );
+
+    var cleanLabel = label && label.trim()
+      ? label.trim()
+      : defaultBankName + ' Unknown Card';
+
+    return items.map(function (t) {
+      if (
+        !t.cardInfo ||
+        t.cardInfo.indexOf('No Card #') !== -1 ||
+        t.cardInfo.indexOf('Pending Card Assignment') !== -1
+      ) {
+        var clone = Object.assign({}, t);
+        clone.cardInfo = cleanLabel;
+        return clone;
+      }
+
+      return t;
+    });
+  }
+
+  function updateInsightBanner(localData, modeLabel) {
+    var panel = $('global-doc-insight');
+    var label = $('global-bank-label');
+
+    if (!panel || !label) return;
+
+    panel.classList.remove('hidden');
+
+    var cards = Array.from(localData.cardsFound || []);
+
+    var cardBadges = cards.map(function (c) {
+      return '<span class="text-indigo-400 ml-2 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">' +
+        escapeHtml(c) +
+        '</span>';
+    }).join('');
+
+    if (!cardBadges) {
+      cardBadges =
+        '<span class="text-indigo-400 ml-3 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">' +
+        'No Card # Found' +
+        '</span>';
+    }
+
+    var modeBadge = modeLabel
+      ? '<span class="text-emerald-400 ml-3 text-xs border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-900/30">' +
+        escapeHtml(modeLabel) +
+        '</span>'
+      : '';
+
+    label.innerHTML = escapeHtml(localData.globalBankName || 'Detected Statement') + ' ' + cardBadges + modeBadge;
+  }
+
+  function parseLocalTextRegex(text) {
+    var localData = extractLocalStructure(text);
+    updateInsightBanner(localData, 'Local Card Map');
+
+    var idCounter = Date.now();
+    var matchedTransactions = [];
+
+    localData.structuralTx.forEach(function (t) {
+      var ruleMapping = runRuleEngineOnText(t.rawDesc);
+
+      matchedTransactions.push({
+        id: idCounter++,
+        postDate: t.postDate,
+        transDate: t.transDate,
+        cardInfo: t.cardInfo,
+        merchant: t.rawDesc,
+        mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : t.rawDesc,
+        category: ruleMapping.category,
+        details: '',
+        amount: t.amount
+      });
+    });
+
+    matchedTransactions = enrichMissingCardInfo(matchedTransactions, localData.globalBankName);
+
+    var matchedCb = localData.structuralCb.map(function (c) {
+      return {
+        id: idCounter++,
+        card: c.cardInfo,
+        date: c.date,
+        merchant: c.rawDesc,
+        amount: c.amount
+      };
+    });
+
+    if (matchedTransactions.length > 0 || matchedCb.length > 0) {
+      transactions = transactions.concat(matchedTransactions);
+      cashbacks = cashbacks.concat(matchedCb);
+
+      toast(
+        'Parsed ' +
+        matchedTransactions.length +
+        ' transactions and ' +
+        matchedCb.length +
+        ' cashback/rebate entries.'
+      );
+    } else {
+      toast('No transactional rows detected. Check Raw Text Inspector.');
+    }
+  }
+
+  window.parseLocalTextRegex = parseLocalTextRegex;
+
+  function parseSourcedTransactions(aiString, rawText) {
+    try {
+      var cleanJson = JSON.parse(aiString);
+
+      if (!Array.isArray(cleanJson)) {
+        parseLocalTextRegex(rawText || aiString);
+        return;
+      }
+
+      var localData = extractLocalStructure(rawText || '');
+      updateInsightBanner(localData, 'Hybrid Local-AI');
+
+      var availableLocalTx = localData.structuralTx.slice();
+
+      cleanJson.forEach(function (t) {
+        if (t.category && appCategories.indexOf(t.category) === -1 && t.category !== 'Uncategorized') {
+          appCategories.push(t.category);
+        }
+      });
+
+      renderCategories();
+
+      var parsedTx = [];
+      var idCounter = Date.now();
+
+      cleanJson.forEach(function (t) {
+        var rawMerc = t.merchant || 'Generic';
+        var aiCat = t.category || 'Uncategorized';
+        var amt = parseFloat(t.amount) || 0;
+        var date = t.postDate || 'Today';
+
+        var exactCardMatch = t.cardInfo || localData.globalBankName || 'Unknown Card';
+
+        var localIndexMatch = availableLocalTx.findIndex(function (lt) {
+          return Number(lt.amount).toFixed(2) === Number(amt).toFixed(2) &&
+            String(lt.postDate) === String(date);
+        });
+
+        if (localIndexMatch > -1) {
+          exactCardMatch = availableLocalTx[localIndexMatch].cardInfo;
+          availableLocalTx.splice(localIndexMatch, 1);
         }
 
-        function toggleRawTextInspector() {
-            const container = document.getElementById('raw-text-container');
-            const chevron = document.getElementById('raw-text-chevron');
-            if (container.classList.contains('hidden')) {
-                container.classList.remove('hidden');
-                chevron.classList.add('rotate-180');
-            } else {
-                container.classList.add('hidden');
-                chevron.classList.remove('rotate-180');
+        var upperRaw = rawMerc.toUpperCase();
+        var upperCat = aiCat.toUpperCase();
+
+        var matchedRule = rules.find(function (r) {
+          return upperRaw.indexOf(String(r.trigger || '').toUpperCase()) !== -1 ||
+            String(r.trigger || '').toUpperCase() === upperCat;
+        });
+
+        var isCashback =
+          upperRaw.indexOf('CASH BACK') !== -1 ||
+          upperRaw.indexOf('CASHBACK') !== -1 ||
+          upperRaw.indexOf('CASH REBATE') !== -1 ||
+          upperRaw.indexOf('REBATE') !== -1 ||
+          upperCat.indexOf('CASHBACK') !== -1;
+
+        if (isCashback) {
+          cashbacks.push({
+            id: idCounter++,
+            card: exactCardMatch,
+            date: date,
+            merchant: rawMerc,
+            amount: amt
+          });
+        } else {
+          parsedTx.push({
+            id: idCounter++,
+            postDate: date,
+            transDate: t.transDate || date,
+            cardInfo: exactCardMatch,
+            merchant: rawMerc,
+            mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
+            category: (matchedRule ? matchedRule.category : aiCat),
+            details: t.details || '',
+            amount: amt
+          });
+        }
+      });
+
+      parsedTx = enrichMissingCardInfo(parsedTx, localData.globalBankName);
+      transactions = transactions.concat(parsedTx);
+    } catch (e) {
+      console.error('Hybrid merge failed. Falling back to local parser.', e);
+      parseLocalTextRegex(rawText || aiString);
+    }
+  }
+
+  window.parseSourcedTransactions = parseSourcedTransactions;
+
+  // -----------------------------
+  // Raw text inspector / password modal
+  // -----------------------------
+  function toggleRawTextInspector() {
+    var container = $('raw-text-container');
+    var chevron = $('raw-text-chevron');
+
+    if (!container) return;
+
+    if (container.classList.contains('hidden')) {
+      container.classList.remove('hidden');
+      if (chevron) chevron.classList.add('rotate-180');
+    } else {
+      container.classList.add('hidden');
+      if (chevron) chevron.classList.remove('rotate-180');
+    }
+  }
+
+  function cancelUnlock() {
+    var modal = $('password-modal');
+    var dropZone = $('drop-zone');
+    var fileInput = $('file-input');
+
+    if (modal) modal.classList.add('hidden');
+    if (dropZone) dropZone.classList.remove('hidden');
+    if (fileInput) fileInput.value = '';
+
+    selectedFileBuffer = null;
+  }
+
+  function submitPassword() {
+    var input = $('pdf-password');
+    var pass = input ? input.value : '';
+
+    if (!pass) return;
+
+    var modal = $('password-modal');
+    if (modal) modal.classList.add('hidden');
+    if (input) input.value = '';
+
+    tryUnlockAndLoadPDF(pass);
+  }
+
+  window.toggleRawTextInspector = toggleRawTextInspector;
+  window.cancelUnlock = cancelUnlock;
+  window.submitPassword = submitPassword;
+
+  // -----------------------------
+  // Modals / rules / edit
+  // -----------------------------
+  function injectCardInfoField() {
+    var existing = $('edit-card-info');
+    if (existing) return;
+
+    var editDetails = $('edit-details');
+    if (!editDetails) return;
+
+    var wrapper = editDetails.closest('div');
+    if (!wrapper || !wrapper.parentNode) return;
+
+    var div = document.createElement('div');
+    div.innerHTML =
+      '<label class="block text-xs text-slate-400 mb-1">Card Label</label>' +
+      '<input type="text" id="edit-card-info" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-primary" placeholder="e.g. Maybank Visa **** 3804">';
+
+    wrapper.parentNode.insertBefore(div, wrapper);
+  }
+
+  function openRuleModal(id) {
+    var form = $('rule-form');
+    if (form) form.reset();
+
+    if (id !== null && id !== undefined) {
+      var title = $('rule-modal-title');
+      if (title) title.innerText = 'Edit Parsing Rule';
+
+      var rule = rules.find(function (x) { return x.id === id; });
+
+      if (rule) {
+        if ($('rule-id')) $('rule-id').value = rule.id;
+        if ($('rule-trigger')) $('rule-trigger').value = rule.trigger;
+        if ($('rule-mapped-merchant')) $('rule-mapped-merchant').value = rule.mappedMerchant;
+        if ($('rule-category')) $('rule-category').value = rule.category;
+      }
+    } else {
+      if ($('rule-modal-title')) $('rule-modal-title').innerText = 'Add Parsing Rule';
+      if ($('rule-id')) $('rule-id').value = '';
+    }
+
+    var modal = $('rule-modal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeRuleModal() {
+    var modal = $('rule-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function saveRule(e) {
+    if (e) e.preventDefault();
+
+    var id = $('rule-id') ? $('rule-id').value : '';
+
+    var newRule = {
+      trigger: $('rule-trigger') ? $('rule-trigger').value.trim() : '',
+      mappedMerchant: $('rule-mapped-merchant') ? $('rule-mapped-merchant').value.trim() : '',
+      category: $('rule-category') ? $('rule-category').value : 'Uncategorized'
+    };
+
+    if (!newRule.trigger || !newRule.mappedMerchant) {
+      toast('Please enter both trigger and mapped merchant.');
+      return;
+    }
+
+    if (id) {
+      var index = rules.findIndex(function (x) { return String(x.id) === String(id); });
+      if (index !== -1) {
+        rules[index] = Object.assign({}, rules[index], newRule);
+      }
+      toast('Parsing rule updated.');
+    } else {
+      newRule.id = Date.now();
+      rules.push(newRule);
+      toast('Parsing rule registered.');
+    }
+
+    closeRuleModal();
+    reparseExistingWithRules();
+    renderAll();
+    testSandbox();
+  }
+
+  function deleteRule(id) {
+    rules = rules.filter(function (r) { return r.id !== id; });
+    toast('Rule deleted.');
+    renderAll();
+  }
+
+  function addRuleFromConsole() {
+    switchTab('maintenance');
+    openRuleModal(null);
+  }
+
+  function reparseExistingWithRules() {
+    transactions.forEach(function (t) {
+      var mapRes = runRuleEngineOnText(t.merchant, t.category);
+      if (mapRes.ruleMatched) {
+        t.mappedMerchant = mapRes.mappedMerchant;
+        t.category = mapRes.category;
+      }
+    });
+  }
+
+  function testSandbox() {
+    var inputEl = $('sandbox-input');
+    var out = $('sandbox-output');
+
+    if (!inputEl || !out) return;
+
+    var input = inputEl.value.trim();
+
+    if (!input) {
+      out.innerText = 'Type raw text or category to test mapping...';
+      out.className = 'text-slate-300 font-mono italic';
+      return;
+    }
+
+    var parsed = runRuleEngineOnText(input);
+
+    if (parsed.ruleMatched) {
+      out.innerHTML =
+        '<span class="text-green-400 font-bold">Rule Match Found:</span><br>' +
+        'Mapped: <strong class="text-white">' + escapeHtml(parsed.mappedMerchant) + '</strong><br>' +
+        'Category: <strong class="text-indigo-400">' + escapeHtml(parsed.category) + '</strong>';
+      out.className = 'text-slate-200 font-mono';
+    } else {
+      out.innerHTML =
+        '<span class="text-slate-500 italic">No exact rule match. Auto category: ' +
+        escapeHtml(parsed.category) +
+        '</span>';
+      out.className = 'text-slate-500 font-mono';
+    }
+  }
+
+  window.openRuleModal = openRuleModal;
+  window.closeRuleModal = closeRuleModal;
+  window.saveRule = saveRule;
+  window.deleteRule = deleteRule;
+  window.addRuleFromConsole = addRuleFromConsole;
+  window.testSandbox = testSandbox;
+
+  function openEditModal(id) {
+    injectCardInfoField();
+
+    var modal = $('edit-modal');
+    var form = $('edit-form');
+
+    if (form) form.reset();
+
+    if (id !== null && id !== undefined) {
+      if ($('edit-modal-title')) $('edit-modal-title').innerText = 'Edit Transaction';
+
+      var t = transactions.find(function (x) { return x.id === id; });
+
+      if (t) {
+        if ($('edit-id')) $('edit-id').value = t.id;
+        if ($('edit-post')) $('edit-post').value = t.postDate || '';
+        if ($('edit-trans')) $('edit-trans').value = t.transDate || '';
+        if ($('edit-card-info')) $('edit-card-info').value = t.cardInfo || '';
+        if ($('edit-merchant')) $('edit-merchant').value = t.merchant || '';
+        if ($('edit-details')) $('edit-details').value = t.details || '';
+        if ($('edit-category')) $('edit-category').value = t.category || 'Uncategorized';
+        if ($('edit-amount')) $('edit-amount').value = t.amount || 0;
+      }
+    } else {
+      if ($('edit-modal-title')) $('edit-modal-title').innerText = 'Add Manual Transaction';
+      if ($('edit-id')) $('edit-id').value = '';
+
+      var today = new Date();
+      var d = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0');
+
+      if ($('edit-post')) $('edit-post').value = d;
+      if ($('edit-trans')) $('edit-trans').value = d;
+      if ($('edit-card-info')) $('edit-card-info').value = 'Manual Entry';
+    }
+
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeEditModal() {
+    var modal = $('edit-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function saveEditTransaction() {
+    var id = $('edit-id') ? $('edit-id').value : '';
+
+    var rawMerc = $('edit-merchant') ? $('edit-merchant').value : '';
+    var catOverride = $('edit-category') ? $('edit-category').value : 'Uncategorized';
+    var ruleMapping = runRuleEngineOnText(rawMerc, catOverride);
+
+    var t = {
+      postDate: $('edit-post') ? $('edit-post').value : '',
+      transDate: $('edit-trans') ? $('edit-trans').value : '',
+      cardInfo: $('edit-card-info') ? $('edit-card-info').value || 'Manual Entry' : 'Manual Entry',
+      merchant: rawMerc,
+      mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawMerc,
+      category: ruleMapping.ruleMatched ? ruleMapping.category : catOverride,
+      details: $('edit-details') ? $('edit-details').value : '',
+      amount: parseFloat($('edit-amount') ? $('edit-amount').value : 0) || 0
+    };
+
+    if (id) {
+      var index = transactions.findIndex(function (x) { return String(x.id) === String(id); });
+      if (index !== -1) {
+        transactions[index] = Object.assign({}, transactions[index], t);
+      }
+    } else {
+      t.id = Date.now();
+      transactions.push(t);
+    }
+
+    closeEditModal();
+    renderAll();
+    if (currentTab === 'analytics') initChart();
+  }
+
+  function deleteTransaction(id) {
+    transactions = transactions.filter(function (t) { return t.id !== id; });
+    renderAll();
+    if (currentTab === 'analytics') initChart();
+  }
+
+  function createRuleFromEdit() {
+    var rawMerc = $('edit-merchant') ? $('edit-merchant').value : '';
+
+    if (!rawMerc) {
+      toast('Please enter a raw description first.');
+      return;
+    }
+
+    closeEditModal();
+    switchTab('maintenance');
+    openRuleModal(null);
+
+    if ($('rule-trigger')) $('rule-trigger').value = rawMerc;
+    if ($('rule-mapped-merchant')) $('rule-mapped-merchant').value = rawMerc;
+  }
+
+  function addManualTransaction() {
+    openEditModal(null);
+  }
+
+  window.openEditModal = openEditModal;
+  window.closeEditModal = closeEditModal;
+  window.saveEditTransaction = saveEditTransaction;
+  window.deleteTransaction = deleteTransaction;
+  window.createRuleFromEdit = createRuleFromEdit;
+  window.addManualTransaction = addManualTransaction;
+
+  // -----------------------------
+  // Cashback
+  // -----------------------------
+  function addManualCashback() {
+    var amount = parseFloat(prompt('Enter cashback amount (RM):', '0.00'));
+
+    if (!amount) return;
+
+    var bankCard = prompt('Enter Bank / Card Name:', 'Manual Entry Card');
+    var merchant = prompt('Enter Description:', 'Bonus Reward');
+
+    cashbacks.push({
+      id: Date.now(),
+      card: bankCard || 'Manual Entry',
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
+      merchant: merchant || 'Generic Card Promo',
+      amount: amount
+    });
+
+    renderCashback();
+  }
+
+  window.addManualCashback = addManualCashback;
+
+  // -----------------------------
+  // Rendering
+  // -----------------------------
+  function renderAll() {
+    renderConsoleTable();
+    renderMasterTransactions();
+    renderAnalyticsCards();
+    renderCashback();
+    renderRulesTable();
+
+    if (currentTab === 'analytics') {
+      initChart();
+    }
+  }
+
+  function renderConsoleTable() {
+    var tbody = $('extracted-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+
+    if (transactions.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="4" class="p-8 text-center text-slate-500 text-sm">No transactions parsed yet. Upload a statement to get started.</td></tr>';
+      return;
+    }
+
+    transactions.forEach(function (t) {
+      tbody.innerHTML +=
+        '<tr class="hover:bg-slate-800/50 transition-colors">' +
+        '<td class="px-4 py-3 whitespace-nowrap">' +
+        '<div class="text-white">' + escapeHtml(t.postDate) + '</div>' +
+        '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
+        escapeHtml(t.cardInfo || 'Unknown') +
+        '</div>' +
+        '</td>' +
+        '<td class="px-4 py-3">' +
+        '<div class="font-medium text-white">' + escapeHtml(t.mappedMerchant || t.merchant) + '</div>' +
+        '<div class="flex gap-2 items-center mt-1">' +
+        '<span class="text-xs text-slate-500 truncate max-w-xs">' + escapeHtml(t.merchant) + '</span>' +
+        '<span class="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded">' +
+        escapeHtml(t.category) +
+        '</span>' +
+        '</div>' +
+        '</td>' +
+        '<td class="px-4 py-3 text-right font-medium text-white">' + money(t.amount) + '</td>' +
+        '<td class="px-4 py-3 text-center">' +
+        '<button onclick="openEditModal(' + t.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>' +
+        '</td>' +
+        '</tr>';
+    });
+  }
+
+  function filterTransactions() {
+    var searchBox = $('search-input');
+    renderMasterTransactions(searchBox ? searchBox.value : '');
+  }
+
+  function renderMasterTransactions(filterText) {
+    filterText = filterText || '';
+
+    var desktopBody = $('master-table-body');
+    var mobileList = $('master-mobile-list');
+
+    if (!desktopBody || !mobileList) return;
+
+    desktopBody.innerHTML = '';
+    mobileList.innerHTML = '';
+
+    var term = filterText.toLowerCase();
+
+    var filtered = transactions.filter(function (t) {
+      return String(t.merchant || '').toLowerCase().indexOf(term) !== -1 ||
+        String(t.mappedMerchant || '').toLowerCase().indexOf(term) !== -1 ||
+        String(t.category || '').toLowerCase().indexOf(term) !== -1 ||
+        String(t.cardInfo || '').toLowerCase().indexOf(term) !== -1 ||
+        String(t.amount || '').indexOf(term) !== -1 ||
+        String(t.postDate || '').indexOf(term) !== -1;
+    });
+
+    if (filtered.length === 0) {
+      var emptyHTML = '<div class="p-8 text-center text-slate-500 text-sm">No transactions matched.</div>';
+      desktopBody.innerHTML = '<tr><td colspan="5">' + emptyHTML + '</td></tr>';
+      mobileList.innerHTML = emptyHTML;
+      return;
+    }
+
+    filtered.forEach(function (t) {
+      desktopBody.innerHTML +=
+        '<tr class="hover:bg-slate-800/50 transition-colors">' +
+        '<td class="px-4 py-3 whitespace-nowrap text-slate-400">' +
+        '<div>' + escapeHtml(t.postDate) + '</div>' +
+        '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
+        escapeHtml(t.cardInfo || 'Unknown') +
+        '</div>' +
+        '</td>' +
+        '<td class="px-4 py-3 font-medium text-white">' + escapeHtml(t.mappedMerchant || t.merchant) + '</td>' +
+        '<td class="px-4 py-3">' +
+        '<span class="text-[11px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-indigo-300">' + escapeHtml(t.category) + '</span>' +
+        (t.details ? '<div class="text-xs text-slate-500 mt-1">' + escapeHtml(t.details) + '</div>' : '') +
+        '</td>' +
+        '<td class="px-4 py-3 text-right font-medium text-white">' + money(t.amount) + '</td>' +
+        '<td class="px-4 py-3 text-center">' +
+        '<div class="flex items-center justify-center gap-1.5">' +
+        '<button onclick="openEditModal(' + t.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>' +
+        '<button onclick="deleteTransaction(' + t.id + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"><i class="ph ph-trash"></i></button>' +
+        '</div>' +
+        '</td>' +
+        '</tr>';
+
+      mobileList.innerHTML +=
+        '<div class="p-4 hover:bg-slate-800/30 transition-colors">' +
+        '<div class="flex justify-between items-start mb-2">' +
+        '<div class="font-medium text-white leading-tight pr-4">' + escapeHtml(t.mappedMerchant || t.merchant) + '</div>' +
+        '<div class="font-bold text-white whitespace-nowrap">RM ' + money(t.amount) + '</div>' +
+        '</div>' +
+        '<div class="flex justify-between items-end">' +
+        '<div class="space-y-1">' +
+        '<div class="text-xs text-slate-400">' + escapeHtml(t.postDate) +
+        '<span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1">' + escapeHtml(t.cardInfo || 'Unknown') + '</span>' +
+        '</div>' +
+        '<span class="inline-block text-[10px] bg-slate-800 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">' + escapeHtml(t.category) + '</span>' +
+        '</div>' +
+        '<div class="flex gap-2">' +
+        '<button onclick="openEditModal(' + t.id + ')" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>' +
+        '</div>' +
+        '</div>' +
+        '</div>';
+    });
+  }
+
+  function renderAnalyticsCards() {
+    var total = transactions.reduce(function (sum, t) {
+      return sum + (parseFloat(t.amount) || 0);
+    }, 0);
+
+    if ($('stat-total')) $('stat-total').innerText = total.toFixed(2);
+    if ($('stat-count')) $('stat-count').innerText = transactions.length;
+
+    if ($('stat-high')) {
+      if (transactions.length > 0) {
+        var highest = transactions.reduce(function (prev, current) {
+          return (prev.amount > current.amount) ? prev : current;
+        });
+
+        $('stat-high').innerText = highest.mappedMerchant || highest.merchant;
+      } else {
+        $('stat-high').innerText = '--';
+      }
+    }
+  }
+
+  function renderCashback() {
+    var container = $('cashback-cards-container');
+    var list = $('cashback-history-list');
+    var totalDisplay = $('cashback-total-amount');
+
+    if (!container || !list) return;
+
+    container.innerHTML = '';
+    list.innerHTML = '';
+
+    var grouped = {};
+    var totalCashbackSum = 0;
+
+    cashbacks.forEach(function (c) {
+      var card = c.card || c.cardInfo || 'Unknown Statement';
+      if (!grouped[card]) grouped[card] = 0;
+
+      grouped[card] += parseFloat(c.amount || 0);
+      totalCashbackSum += parseFloat(c.amount || 0);
+    });
+
+    if (totalDisplay) totalDisplay.innerText = totalCashbackSum.toFixed(2);
+
+    Object.keys(grouped).forEach(function (card) {
+      var amount = grouped[card];
+
+      container.innerHTML +=
+        '<div class="glass-panel p-4 rounded-2xl border border-slate-700 relative flex flex-col justify-between hover:border-slate-500 transition-colors">' +
+        '<div class="flex items-center gap-2 mb-3 text-slate-400">' +
+        '<i class="ph ph-bank text-lg"></i>' +
+        '<span class="text-sm font-medium truncate">' + escapeHtml(card) + '</span>' +
+        '</div>' +
+        '<div class="text-2xl font-bold text-emerald-400">RM ' + money(amount) + '</div>' +
+        '</div>';
+    });
+
+    if (cashbacks.length === 0) {
+      list.innerHTML =
+        '<li class="p-4 text-center text-sm text-slate-500">No cashback entries found from statements or manual entry.</li>';
+      return;
+    }
+
+    cashbacks.slice().reverse().forEach(function (c) {
+      list.innerHTML +=
+        '<li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors">' +
+        '<div>' +
+        '<div class="font-medium text-white">' + escapeHtml(c.merchant) + '</div>' +
+        '<div class="text-xs text-slate-400">' + escapeHtml(c.date) + ' • ' + escapeHtml(c.card || c.cardInfo || 'Unknown') + '</div>' +
+        '</div>' +
+        '<div class="font-bold text-emerald-400">+ RM ' + money(c.amount) + '</div>' +
+        '</li>';
+    });
+  }
+
+  function renderRulesTable() {
+    var tbody = $('rules-table-body');
+    var countBadge = $('rule-count-badge');
+
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (countBadge) countBadge.innerText = rules.length + ' Active Rules';
+
+    if (rules.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="4" class="p-8 text-center text-slate-500">No custom parsing rules found. Click Add Rule to create one.</td></tr>';
+      return;
+    }
+
+    rules.forEach(function (rule) {
+      tbody.innerHTML +=
+        '<tr class="hover:bg-slate-800/50 transition-colors">' +
+        '<td class="px-4 py-3 font-mono text-slate-300 font-semibold text-xs select-all bg-slate-900/40">' + escapeHtml(rule.trigger) + '</td>' +
+        '<td class="px-4 py-3 font-medium text-white">' + escapeHtml(rule.mappedMerchant) + '</td>' +
+        '<td class="px-4 py-3">' +
+        '<span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">' + escapeHtml(rule.category) + '</span>' +
+        '</td>' +
+        '<td class="px-4 py-3 text-center">' +
+        '<div class="flex items-center justify-center gap-1">' +
+        '<button onclick="openRuleModal(' + rule.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>' +
+        '<button onclick="deleteRule(' + rule.id + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>' +
+        '</div>' +
+        '</td>' +
+        '</tr>';
+    });
+  }
+
+  window.renderAll = renderAll;
+  window.filterTransactions = filterTransactions;
+  window.renderMasterTransactions = renderMasterTransactions;
+  window.renderCashback = renderCashback;
+
+  // -----------------------------
+  // Chart
+  // -----------------------------
+  function initChart() {
+    var ctx = $('spendingChart');
+
+    if (!ctx || typeof Chart === 'undefined') return;
+
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+
+    var groupData = {};
+
+    transactions.forEach(function (t) {
+      var cat = t.category || 'Uncategorized';
+      groupData[cat] = (groupData[cat] || 0) + Math.abs(parseFloat(t.amount || 0));
+    });
+
+    var labels = Object.keys(groupData);
+    var data = Object.keys(groupData).map(function (k) {
+      return parseFloat(groupData[k].toFixed(2));
+    });
+
+    if (labels.length === 0) {
+      labels.push('No Data Available');
+      data.push(0);
+    }
+
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.font.family = 'Inter';
+
+    chartInstance = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: [
+            '#6366f1',
+            '#ec4899',
+            '#10b981',
+            '#f59e0b',
+            '#8b5cf6',
+            '#64748b',
+            '#14b8a6',
+            '#f97316',
+            '#ef4444'
+          ],
+          borderWidth: 2,
+          borderColor: '#1e293b'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onHover: function (event, chartElement) {
+          if (event && event.native && event.native.target) {
+            event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+          }
+        },
+        onClick: function (event, elements) {
+          var search = $('search-input');
+
+          if (elements.length > 0) {
+            var index = elements[0].index;
+            var category = chartInstance.data.labels[index];
+
+            if (category !== 'No Data Available' && search) {
+              search.value = category;
+              filterTransactions();
             }
-        }
-
-        function cancelUnlock() {
-            document.getElementById('password-modal').classList.add('hidden');
-            document.getElementById('drop-zone').classList.remove('hidden');
-            document.getElementById('file-input').value = '';
-            selectedFileBuffer = null;
-        }
-
-        function submitPassword() {
-            const pass = document.getElementById('pdf-password').value;
-            if(!pass) return;
-
-            document.getElementById('password-modal').classList.add('hidden');
-            document.getElementById('pdf-password').value = '';
-            
-            tryUnlockAndLoadPDF(pass);
-        }
-
-async function executeTextParsing(rawText) {
-            const statusBox = document.getElementById('processing-status');
-            const bar = document.getElementById('process-bar');
-            
-            if (sessionSettings.cfUrl) {
-                try {
-                    const response = await fetch(sessionSettings.cfUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            action: 'parse',
-                            documentText: rawText,
-                            useAI: sessionSettings.useAI,
-                            aiModel: sessionSettings.aiModel,
-                            existingCategories: appCategories
-                        })
-                    });
-                    
-                    if (!response.ok) throw new Error("Worker responded with error status");
-                    const result = await response.json();
-                    
-                    // PASS THE rawText DOWN SO WE CAN PERFORM THE HYBRID MERGE
-                    if (result.transactions && Array.isArray(result.transactions)) {
-                        parseSourcedTransactions(JSON.stringify(result.transactions), rawText);
-                    } else if (result.data) {
-                        parseSourcedTransactions(result.data, rawText);
-                    } else {
-                        parseLocalTextRegex(rawText);
-                    }
-                    
-                    document.getElementById('confidence-score').innerText = sessionSettings.useAI ? "99% (Hybrid AI)" : "92% (Worker)";
-                    showMessage("Hybrid Sync Parse completed.");
-
-                } catch (err) {
-                    showMessage("Worker Error: " + err.message + ". Falling back to Local Parser.");
-                    parseLocalTextRegex(rawText);
-                    document.getElementById('confidence-score').innerText = "88% (Local Fallback)";
-                }
-            } else {
-                parseLocalTextRegex(rawText);
-                document.getElementById('confidence-score').innerText = "95% (Rule Engine)";
+          } else if (search) {
+            search.value = '';
+            filterTransactions();
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              padding: 16
             }
+          }
+        },
+        cutout: '65%'
+      }
+    });
+  }
 
-            bar.style.width = '100%';
-            setTimeout(() => {
-                statusBox.classList.add('hidden');
-                document.getElementById('extraction-results').classList.remove('hidden');
-                document.getElementById('parsed-summary-title').innerText = `Extracted from: ${selectedFileName}`;
-                renderAll();
-                setTimeout(() => switchTab('analytics'), 1000);
-            }, 500);
-        }
+  window.initChart = initChart;
 
-        // --- NEW: Core Structural Extractor (Used by both Local and Hybrid engines) ---
-        function extractLocalStructure(text) {
-            const lines = text.split('\n');
-            let structuralTx = [];
-            let structuralCb = [];
-            
-            let globalBankName = "Unidentified Bank";
-            const bankMatch = lines.slice(0, 50).join(' ').match(/(Maybank|CIMB|Public Bank|RHB|Hong Leong|AmBank|UOB|Standard Chartered|HSBC|Citibank|Alliance Bank|Affin Bank)/i);
-            if (bankMatch) globalBankName = bankMatch[1];
+  // -----------------------------
+  // Export / setup / sync
+  // -----------------------------
+  function exportData() {
+    if (transactions.length === 0) {
+      toast('No transactions to export.');
+      return;
+    }
 
-            let currentCardNumber = "No Card #";
-            let cardsFound = new Set();
-            const rowPattern = /(\d{2}\/\d{2})\s+(\d{2}\/\d{2})?\s+([\s\S]+?)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{2}))/g;
-            
-            lines.forEach(line => {
-                const cleanLine = line.trim();
-                
-                // Rolling State Cursor for Card Numbers
-                const cardMatch = cleanLine.match(/(?:(?:XXXX|xxxx|\*\*\*\*)[-\s]?|Card\s(?:No\.?\s)?|ending\sin\s)(\d{4})/i);
-                if (cardMatch) {
-                    currentCardNumber = "**** " + cardMatch[1];
-                    cardsFound.add(currentCardNumber);
-                }
+    var csv = 'Post Date,Trans Date,Card,Merchant,Mapped Merchant,Category,Details,Amount (RM)\n';
 
-                const activeCardInfo = `${globalBankName} ${currentCardNumber}`.trim();
-                let match;
-                rowPattern.lastIndex = 0;
-                
-                while ((match = rowPattern.exec(cleanLine)) !== null) {
-                    const postDate = match[1];
-                    const transDate = match[2] || postDate;
-                    const rawDesc = match[3].trim().toUpperCase();
-                    const amount = parseFloat(match[4].replace(/,/g, ''));
-                    
-                    if (amount > 0 && rawDesc.length > 2 && !rawDesc.includes('TOTAL') && !rawDesc.includes('SUBTOTAL')) {
-                        const isCb = rawDesc.includes("CASH BACK") || rawDesc.includes("CASHBACK") || rawDesc.includes("REBATE");
-                        if (isCb) {
-                            structuralCb.push({ cardInfo: activeCardInfo, date: postDate, amount: amount, rawDesc });
-                        } else {
-                            structuralTx.push({ postDate, transDate, cardInfo: activeCardInfo, amount: amount, rawDesc });
-                        }
-                    }
-                }
-            });
+    transactions.forEach(function (t) {
+      csv += [
+        t.postDate,
+        t.transDate,
+        t.cardInfo || '',
+        t.merchant || '',
+        t.mappedMerchant || t.merchant || '',
+        t.category || '',
+        t.details || '',
+        t.amount || 0
+      ].map(function (v) {
+        return '"' + String(v).replace(/"/g, '""') + '"';
+      }).join(',') + '\n';
+    });
 
-            return { structuralTx, structuralCb, cardsFound, globalBankName };
-        }
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = window.URL.createObjectURL(blob);
+    var a = document.createElement('a');
 
-        // --- HYBRID AI MERGE FUNCTION ---
-        function parseSourcedTransactions(aiString, rawText) {
-            try {
-                const cleanJson = JSON.parse(aiString);
-                if (Array.isArray(cleanJson)) {
-                    
-                    // 1. SILENT LOCAL PARSE: Get 100% accurate card mapping structure
-                    const localData = extractLocalStructure(rawText);
-                    let availableLocalTx = [...localData.structuralTx]; // Clone to prevent collision matching
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', 'processed_statements.csv');
 
-                    // 2. Update Insight Banner directly from Local certainty
-                    const insightPanel = document.getElementById('global-doc-insight');
-                    const insightLabel = document.getElementById('global-bank-label');
-                    if(insightPanel && insightLabel) {
-                        insightPanel.classList.remove('hidden');
-                        let cardBadges = Array.from(localData.cardsFound).map(c => 
-                            `<span class="text-indigo-400 ml-2 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${c}</span>`
-                        ).join('');
-                        
-                        if (localData.cardsFound.size === 0) {
-                            cardBadges = `<span class="text-indigo-400 ml-3 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">No Card # Found</span>`;
-                        }
-                        insightLabel.innerHTML = `${localData.globalBankName} ${cardBadges} <span class="text-emerald-400 ml-3 text-xs border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-900/30"><i class="ph ph-magic-wand"></i> Hybrid Local-AI</span>`;
-                    }
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-                    // Learn new categories from AI
-                    cleanJson.forEach(t => {
-                        if (t.category && !appCategories.includes(t.category) && t.category !== 'Uncategorized') {
-                            appCategories.push(t.category);
-                        }
-                    });
-                    renderCategories();
+    window.URL.revokeObjectURL(url);
+  }
 
-                    const parsedTx = [];
-                    let idCounter = Date.now();
+  function saveSetup(e) {
+    if (e) e.preventDefault();
 
-                    cleanJson.forEach((t) => {
-                        const rawMerc = t.merchant || 'Generic';
-                        const aiCat = t.category || 'Uncategorized';
-                        const amt = parseFloat(t.amount) || 0.00;
-                        const date = t.postDate || 'Today';
+    sessionSettings.cfUrl = $('cf-url') ? $('cf-url').value.trim() : '';
+    sessionSettings.useAI = $('use-ai-toggle') ? $('use-ai-toggle').checked : false;
+    sessionSettings.aiModel = $('ai-model-select') ? $('ai-model-select').value : 'gemini-2.5-flash';
 
-                        // 3. THE MAGIC MERGE: Find the exact same transaction in the Local mapping by Amount & Date
-                        let exactCardMatch = t.cardInfo || localData.globalBankName; // Default to AI's guess
-                        
-                        const localIndexMatch = availableLocalTx.findIndex(lt => lt.amount === amt && lt.postDate === date);
-                        if (localIndexMatch > -1) {
-                            exactCardMatch = availableLocalTx[localIndexMatch].cardInfo; // Steal local accuracy!
-                            availableLocalTx.splice(localIndexMatch, 1); // Remove from pool to prevent collisions
-                        }
+    var msg = 'Settings saved to session memory.';
+    if (sessionSettings.useAI) msg += ' AI model: ' + sessionSettings.aiModel + '.';
 
-                        let matchedRule = rules.find(r => rawMerc.toUpperCase().includes(r.trigger.toUpperCase()) || r.trigger.toUpperCase() === aiCat.toUpperCase());
-                        const isCashback = rawMerc.toUpperCase().includes("CASHBACK") || rawMerc.toUpperCase().includes("REBATE") || aiCat.toUpperCase().includes("CASHBACK");
+    toast(msg);
+  }
 
-                        if (isCashback) {
-                            cashbacks.push({ id: idCounter++, card: exactCardMatch, date: date, merchant: rawMerc, amount: amt });
-                        } else {
-                            parsedTx.push({
-                                id: idCounter++,
-                                postDate: date,
-                                transDate: t.transDate || date,
-                                cardInfo: exactCardMatch, // 100% accurate hybrid card info
-                                merchant: rawMerc,
-                                mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
-                                category: (matchedRule ? matchedRule.category : aiCat),
-                                details: t.details || '',
-                                amount: amt
-                            });
-                        }
-                    });
+  async function cloudSyncAction(actionType) {
+    if (!sessionSettings.cfUrl) {
+      if (actionType === 'sync') {
+        var backupData = {
+          transactions: transactions,
+          cashbacks: cashbacks,
+          rules: rules,
+          appCategories: appCategories
+        };
 
-                    transactions = [...transactions, ...parsedTx];
-                }
-            } catch(e) {
-                console.error("Hybrid Merge Failed, falling back to Local", e);
-                parseLocalTextRegex(rawText);
-            }
-        }
+        localStorage.setItem('zero_cost_backup', JSON.stringify(backupData));
 
-        // --- PURE LOCAL FALLBACK ---
-        function parseLocalTextRegex(text) {
-            const localData = extractLocalStructure(text);
-            let idCounter = Date.now();
-            let matchedTransactions = [];
-            
-            // 1. Setup UI
-            const insightPanel = document.getElementById('global-doc-insight');
-            const insightLabel = document.getElementById('global-bank-label');
-            if(insightPanel && insightLabel) {
-                insightPanel.classList.remove('hidden');
-                let cardBadges = Array.from(localData.cardsFound).map(c => 
-                    `<span class="text-indigo-400 ml-2 text-xs border border-indigo-500/30 px-2.5 py-0.5 rounded-full bg-indigo-900/30">${c}</span>`
-                ).join('');
-                insightLabel.innerHTML = `${localData.globalBankName} ${cardBadges}`;
-            }
+        var syncStatus = $('sync-status-desk');
+        if (syncStatus) syncStatus.innerText = 'Just now (Local)';
 
-            // 2. Map standard rule engine over local results
-            localData.structuralTx.forEach(t => {
-                const ruleMapping = runRuleEngineOnText(t.rawDesc);
-                matchedTransactions.push({
-                    id: idCounter++,
-                    postDate: t.postDate,
-                    transDate: t.transDate,
-                    cardInfo: t.cardInfo, 
-                    merchant: t.rawDesc,
-                    mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : t.rawDesc,
-                    category: ruleMapping.category,
-                    details: '',
-                    amount: t.amount
-                });
-            });
+        toast('Saved to local browser storage. Add Cloudflare URL in Setup for Cloud Sync.');
+      } else if (actionType === 'load') {
+        var localData = localStorage.getItem('zero_cost_backup');
 
-            // 3. Format cashbacks
-            const matchedCb = localData.structuralCb.map(c => ({
-                id: idCounter++, card: c.cardInfo, date: c.date, merchant: c.rawDesc, amount: c.amount
-            }));
+        if (localData) {
+          try {
+            var backup = JSON.parse(localData);
 
-            if (matchedTransactions.length > 0 || matchedCb.length > 0) {
-                transactions = [...transactions, ...matchedTransactions];
-                cashbacks = [...cashbacks, ...matchedCb];
-                showMessage(`Parsed ${matchedTransactions.length} items using Local Rule Engine.`);
-            } else {
-                showMessage("No transactional rows detected. Please check Raw Text Inspector.");
-            }
-        }
+            transactions = backup.transactions || [];
+            cashbacks = backup.cashbacks || [];
+            rules = backup.rules || [];
+            appCategories = backup.appCategories || appCategories;
 
-
-        function parseSourcedTransactions(aiString) {
-            try {
-                const cleanJson = JSON.parse(aiString);
-                if (Array.isArray(cleanJson)) {
-                    
-                    let learnedNew = false;
-                    cleanJson.forEach(t => {
-                        if (t.category && !appCategories.includes(t.category) && t.category !== 'Uncategorized') {
-                            appCategories.push(t.category);
-                            learnedNew = true;
-                        }
-                    });
-                    if(learnedNew) {
-                        renderCategories();
-                        showMessage("LLM identified and created new category tags!");
-                    }
-
-                    const detectedCard = cleanJson[0]?.cardInfo || "AI Detected Document";
-                    const insightPanel = document.getElementById('global-doc-insight');
-                    const insightLabel = document.getElementById('global-bank-label');
-                    if(insightPanel && insightLabel) {
-                        insightPanel.classList.remove('hidden');
-                        insightLabel.innerHTML = `${detectedCard} <span class="text-emerald-400 ml-3 text-xs border border-emerald-500/30 px-2.5 py-0.5 rounded-full bg-emerald-900/30"><i class="ph ph-sparkle"></i> AI Structured</span>`;
-                    }
-
-                    const parsedTx = [];
-                    let localCbId = Date.now() + 9000;
-
-                    cleanJson.forEach((t, idx) => {
-                        const rawMerc = t.merchant || 'Generic';
-                        const aiCat = t.category || 'Uncategorized';
-                        const amt = parseFloat(t.amount) || 0.00;
-
-                        let matchedRule = rules.find(r => rawMerc.toUpperCase().includes(r.trigger.toUpperCase()) || r.trigger.toUpperCase() === aiCat.toUpperCase());
-
-                        // If AI extracts it as a cashback/rebate entry, send to Cashback Hub
-                        const isCashback = rawMerc.toUpperCase().includes("CASH BACK") || rawMerc.toUpperCase().includes("CASHBACK") || rawMerc.toUpperCase().includes("REBATE") || aiCat.toUpperCase().includes("CASHBACK");
-
-                        if (isCashback) {
-                            cashbacks.push({
-                                id: localCbId++,
-                                card: detectedCard,
-                                date: t.postDate || 'Today',
-                                merchant: rawMerc,
-                                amount: amt
-                            });
-                        } else {
-                            parsedTx.push({
-                                id: Date.now() + idx,
-                                postDate: t.postDate || 'Today',
-                                transDate: t.transDate || 'Today',
-                                cardInfo: detectedCard,
-                                merchant: rawMerc,
-                                mappedMerchant: (matchedRule ? matchedRule.mappedMerchant : t.mappedMerchant) || rawMerc,
-                                category: (matchedRule ? matchedRule.category : aiCat),
-                                details: t.details || '',
-                                amount: amt
-                            });
-                        }
-                    });
-
-                    transactions = [...transactions, ...parsedTx];
-                }
-            } catch(e) {
-                parseLocalTextRegex(aiString);
-            }
-        }
-
-        function reparseExistingWithRules() {
-            transactions.forEach(t => {
-                const mapRes = runRuleEngineOnText(t.merchant, t.category); 
-                if(mapRes.ruleMatched) {
-                    t.mappedMerchant = mapRes.mappedMerchant;
-                    t.category = mapRes.category;
-                }
-            });
-        }
-
-        // --- Rule & Modals ---
-        function openRuleModal(id) {
-            const form = document.getElementById('rule-form');
-            form.reset();
-
-            if (id !== null) {
-                document.getElementById('rule-modal-title').innerText = "Edit Parsing Rule";
-                const rule = rules.find(x => x.id === id);
-                if(rule) {
-                    document.getElementById('rule-id').value = rule.id;
-                    document.getElementById('rule-trigger').value = rule.trigger;
-                    document.getElementById('rule-mapped-merchant').value = rule.mappedMerchant;
-                    document.getElementById('rule-category').value = rule.category;
-                }
-            } else {
-                document.getElementById('rule-modal-title').innerText = "Add Parsing Rule";
-                document.getElementById('rule-id').value = '';
-            }
-            document.getElementById('rule-modal').classList.remove('hidden');
-        }
-
-        function closeRuleModal() {
-            document.getElementById('rule-modal').classList.add('hidden');
-        }
-
-        function saveRule(e) {
-            e.preventDefault();
-            const id = document.getElementById('rule-id').value;
-            const newRule = {
-                trigger: document.getElementById('rule-trigger').value.trim(),
-                mappedMerchant: document.getElementById('rule-mapped-merchant').value.trim(),
-                category: document.getElementById('rule-category').value
-            };
-
-            if (id) {
-                const index = rules.findIndex(x => x.id == id);
-                if(index !== -1) {
-                    rules[index] = { ...rules[index], ...newRule };
-                }
-                showMessage("Parsing rule updated.");
-            } else {
-                newRule.id = Date.now();
-                rules.push(newRule);
-                showMessage("Parsing rule registered.");
-            }
-
-            closeRuleModal();
-            reparseExistingWithRules();
+            renderCategories();
             renderAll();
-            testSandbox();
+
+            if (chartInstance) initChart();
+
+            var loadStatus = $('sync-status-desk');
+            if (loadStatus) loadStatus.innerText = 'Just now (Local)';
+
+            toast('Loaded from local browser storage.');
+          } catch (e) {
+            toast('Error reading local backup data.');
+          }
+        } else {
+          toast('No local backup found.');
         }
+      }
 
-        function deleteRule(id) {
-            rules = rules.filter(r => r.id !== id);
-            showMessage("Rule deleted.");
-            renderAll();
-        }
+      return;
+    }
 
-        function addRuleFromConsole() {
-            switchTab('maintenance');
-            openRuleModal(null);
-        }
+    toast('Initiating cloud ' + actionType + '...');
 
-        // --- Trans Edit & Link to Rule ---
-        function openEditModal(id) {
-            const modal = document.getElementById('edit-modal');
-            const form = document.getElementById('edit-form');
-            form.reset();
+    try {
+      var response = await fetch(sessionSettings.cfUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: actionType,
+          transactions: transactions,
+          cashbacks: cashbacks,
+          rules: rules,
+          appCategories: appCategories
+        })
+      });
 
-            if (id !== null) {
-                document.getElementById('edit-modal-title').innerText = "Edit Transaction";
-                const t = transactions.find(x => x.id === id);
-                if(t) {
-                    document.getElementById('edit-id').value = t.id;
-                    document.getElementById('edit-post').value = t.postDate;
-                    document.getElementById('edit-trans').value = t.transDate;
-                    document.getElementById('edit-merchant').value = t.merchant;
-                    document.getElementById('edit-details').value = t.details;
-                    document.getElementById('edit-category').value = t.category;
-                    document.getElementById('edit-amount').value = t.amount;
-                }
-            } else {
-                document.getElementById('edit-modal-title').innerText = "Add Manual Transaction";
-                document.getElementById('edit-id').value = '';
-                const today = new Date();
-                const d = String(today.getDate()).padStart(2, '0') + '/' + String(today.getMonth() + 1).padStart(2, '0');
-                document.getElementById('edit-post').value = d;
-                document.getElementById('edit-trans').value = d;
-            }
+      if (!response.ok) throw new Error('Cloud ' + actionType + ' proxy failed.');
 
-            modal.classList.remove('hidden');
-        }
+      var data = await response.json();
 
-        function closeEditModal() {
-            document.getElementById('edit-modal').classList.add('hidden');
-        }
+      if (actionType === 'load' && data.backup) {
+        transactions = data.backup.transactions || [];
+        cashbacks = data.backup.cashbacks || [];
+        rules = data.backup.rules || [];
+        appCategories = data.backup.appCategories || appCategories;
 
-        function saveEditTransaction() {
-            const id = document.getElementById('edit-id').value;
-            const rawMerc = document.getElementById('edit-merchant').value;
-            const catOverride = document.getElementById('edit-category').value;
-            const ruleMapping = runRuleEngineOnText(rawMerc, catOverride);
+        renderCategories();
+        renderAll();
+        if (chartInstance) initChart();
 
-            const t = {
-                postDate: document.getElementById('edit-post').value,
-                transDate: document.getElementById('edit-trans').value,
-                merchant: rawMerc,
-                mappedMerchant: ruleMapping.ruleMatched ? ruleMapping.mappedMerchant : rawMerc,
-                category: catOverride,
-                details: document.getElementById('edit-details').value,
-                amount: parseFloat(document.getElementById('edit-amount').value) || 0
-            };
+        toast('Data loaded from Cloud.');
+      } else if (actionType === 'sync') {
+        toast('Data backed up to Cloud.');
+      }
 
-            if (id) {
-                const index = transactions.findIndex(x => x.id == id);
-                if(index !== -1) {
-                    transactions[index] = { ...transactions[index], ...t };
-                }
-            } else {
-                t.id = Date.now();
-                t.cardInfo = "Manual Entry";
-                transactions.push(t);
-            }
+      var desksync = $('sync-status-desk');
+      if (desksync) desksync.innerText = 'Just now (Cloud)';
+    } catch (err) {
+      toast('Sync Error: ' + err.message);
+    }
+  }
 
-            closeEditModal();
-            renderAll();
-            if(currentTab === 'analytics') initChart();
-        }
+  window.exportData = exportData;
+  window.saveSetup = saveSetup;
+  window.cloudSyncAction = cloudSyncAction;
 
-        function deleteTransaction(id) {
-            transactions = transactions.filter(t => t.id !== id);
-            renderAll();
-            if(currentTab === 'analytics') initChart();
-        }
-
-        function createRuleFromEdit() {
-            const rawMerc = document.getElementById('edit-merchant').value;
-            if(!rawMerc) {
-                showMessage("Please enter a raw description first.");
-                return;
-            }
-            closeEditModal();
-            switchTab('maintenance');
-            openRuleModal(null);
-            document.getElementById('rule-trigger').value = rawMerc;
-            document.getElementById('rule-mapped-merchant').value = rawMerc;
-        }
-
-        function addManualCashback() {
-            const amount = parseFloat(prompt("Enter cashback amount (RM):", "0.00"));
-            if(!amount) return;
-            const bankCard = prompt("Enter Bank / Card Name (for grouping):", "Manual Entry Card");
-            const merchant = prompt("Enter Description:", "Bonus Reward");
-            
-            cashbacks.push({
-                id: Date.now(),
-                card: bankCard || 'Manual Entry',
-                date: new Date().toLocaleDateString('en-GB', {day: '2-digit', month: '2-digit'}),
-                merchant: merchant || 'Generic Card Promo',
-                amount: amount
-            });
-            renderCashback();
-        }
-
-        // --- Render Engine ---
-        function renderAll() {
-            renderConsoleTable();
-            renderMasterTransactions();
-            renderAnalyticsCards();
-            renderCashback();
-            renderRulesTable();
-        }
-
-        function renderConsoleTable() {
-            const tbody = document.getElementById('extracted-table-body');
-            tbody.innerHTML = '';
-            
-            if (transactions.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-500 text-sm">No transactions parsed yet. Upload a statement to get started!</td></tr>`;
-                return;
-            }
-
-            transactions.forEach(t => {
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50 transition-colors">
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="text-white">${t.postDate}</div>
-                            <div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">${t.cardInfo || 'Unknown'}</div>
-                        </td>
-                        <td class="px-4 py-3 whitespace-nowrap">${t.transDate}</td>
-                        <td class="px-4 py-3">
-                            <div class="font-medium text-white">${t.mappedMerchant || t.merchant}</div>
-                            <div class="flex gap-2 items-center mt-1">
-                                <span class="text-xs text-slate-500 truncate max-w-xs">${t.merchant}</span>
-                                <span class="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded">${t.category}</span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
-                        <td class="px-4 py-3 text-center">
-                            <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        // FILTER LINK
-        function filterTransactions() {
-            const searchBox = document.getElementById('search-input');
-            if(searchBox) {
-                renderMasterTransactions(searchBox.value);
-            }
-        }
-
-        function renderMasterTransactions(filterText = '') {
-            const desktopBody = document.getElementById('master-table-body');
-            const mobileList = document.getElementById('master-mobile-list');
-            desktopBody.innerHTML = '';
-            mobileList.innerHTML = '';
-
-            const filtered = transactions.filter(t => {
-                const term = filterText.toLowerCase();
-                return t.merchant.toLowerCase().includes(term) || 
-                       (t.mappedMerchant && t.mappedMerchant.toLowerCase().includes(term)) ||
-                       t.category.toLowerCase().includes(term) ||
-                       t.amount.toString().includes(term) ||
-                       t.postDate.includes(term);
-            });
-
-            if(filtered.length === 0) {
-                const emptyHTML = `<div class="p-8 text-center text-slate-500 text-sm">No transactions matched.</div>`;
-                desktopBody.innerHTML = `<tr><td colspan="5">${emptyHTML}</td></tr>`;
-                mobileList.innerHTML = emptyHTML;
-                return;
-            }
-
-            filtered.forEach(t => {
-                desktopBody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50 transition-colors">
-                        <td class="px-4 py-3 whitespace-nowrap text-slate-400">
-                            <div>${t.postDate}</div>
-                            <div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">${t.cardInfo || 'Unknown'}</div>
-                        </td>
-                        <td class="px-4 py-3 font-medium text-white">${t.mappedMerchant || t.merchant}</td>
-                        <td class="px-4 py-3">
-                            <span class="text-[11px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-indigo-300">${t.category}</span>
-                            ${t.details ? `<div class="text-xs text-slate-500 mt-1">${t.details}</div>` : ''}
-                        </td>
-                        <td class="px-4 py-3 text-right font-medium text-white">${t.amount.toFixed(2)}</td>
-                        <td class="px-4 py-3 text-center">
-                            <div class="flex items-center justify-center gap-1.5">
-                                <button onclick="openEditModal(${t.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>
-                                <button onclick="deleteTransaction(${t.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"><i class="ph ph-trash"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-
-                mobileList.innerHTML += `
-                    <div class="p-4 hover:bg-slate-800/30 transition-colors">
-                        <div class="flex justify-between items-start mb-2">
-                            <div class="font-medium text-white leading-tight pr-4">${t.mappedMerchant || t.merchant}</div>
-                            <div class="font-bold text-white whitespace-nowrap">RM ${t.amount.toFixed(2)}</div>
-                        </div>
-                        <div class="flex justify-between items-end">
-                            <div class="space-y-1">
-                                <div class="text-xs text-slate-400">${t.postDate} <span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1">${t.cardInfo}</span></div>
-                                <span class="inline-block text-[10px] bg-slate-850 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">${t.category}</span>
-                            </div>
-                            <div class="flex gap-2">
-                                <button onclick="openEditModal(${t.id})" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        function renderAnalyticsCards() {
-            const total = transactions.reduce((sum, t) => sum + t.amount, 0);
-            document.getElementById('stat-total').innerText = total.toFixed(2);
-            document.getElementById('stat-count').innerText = transactions.length;
-
-            if(transactions.length > 0) {
-                const highest = transactions.reduce((prev, current) => (prev.amount > current.amount) ? prev : current);
-                document.getElementById('stat-high').innerText = highest.mappedMerchant || highest.merchant;
-            } else {
-                document.getElementById('stat-high').innerText = "--";
-            }
-        }
-
-        // --- DASHBOARD: Simple Sum & Reflect Math ---
-        function renderCashback() {
-            const container = document.getElementById('cashback-cards-container');
-            const list = document.getElementById('cashback-history-list');
-            const totalDisplay = document.getElementById('cashback-total-amount');
-            
-            container.innerHTML = '';
-            list.innerHTML = '';
-
-            const grouped = {};
-            let totalCashbackSum = 0;
-            
-            cashbacks.forEach(c => {
-                const mapCard = c.card || "Unknown Statement";
-                if(!grouped[mapCard]) grouped[mapCard] = 0;
-                grouped[mapCard] += c.amount;
-                totalCashbackSum += c.amount;
-            });
-
-            // Set main dashboard total
-            if(totalDisplay) totalDisplay.innerText = totalCashbackSum.toFixed(2);
-
-            for (const [card, amount] of Object.entries(grouped)) {
-                container.innerHTML += `
-                    <div class="glass-panel p-4 rounded-2xl border border-slate-700 relative flex flex-col justify-between hover:border-slate-500 transition-colors">
-                        <div class="flex items-center gap-2 mb-3 text-slate-400">
-                            <i class="ph ph-bank text-lg"></i>
-                            <span class="text-sm font-medium truncate">${card}</span>
-                        </div>
-                        <div class="text-2xl font-bold text-emerald-400">RM ${amount.toFixed(2)}</div>
-                    </div>
-                `;
-            }
-
-            if(cashbacks.length === 0) {
-                 list.innerHTML = `<li class="p-4 text-center text-sm text-slate-500">No cashback entries found from statements or manual entry.</li>`;
-            }
-
-            // Display in list format with most recent items effectively stacking
-            [...cashbacks].reverse().forEach(c => {
-                list.innerHTML += `
-                    <li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors">
-                        <div>
-                            <div class="font-medium text-white">${c.merchant}</div>
-                            <div class="text-xs text-slate-400">${c.date} • ${c.card}</div>
-                        </div>
-                        <div class="font-bold text-emerald-400">+ RM ${c.amount.toFixed(2)}</div>
-                    </li>
-                `;
-            });
-        }
-
-        function renderRulesTable() {
-            const tbody = document.getElementById('rules-table-body');
-            const countBadge = document.getElementById('rule-count-badge');
-            tbody.innerHTML = '';
-            countBadge.innerText = `${rules.length} Active Rules`;
-
-            if(rules.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">No custom parsing rules found. Click 'Add Rule' to create one!</td></tr>`;
-                return;
-            }
-
-            rules.forEach(rule => {
-                tbody.innerHTML += `
-                    <tr class="hover:bg-slate-800/50 transition-colors">
-                        <td class="px-4 py-3 font-mono text-slate-300 font-semibold text-xs select-all bg-slate-900/40">${rule.trigger}</td>
-                        <td class="px-4 py-3 font-medium text-white">${rule.mappedMerchant}</td>
-                        <td class="px-4 py-3">
-                            <span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">${rule.category}</span>
-                        </td>
-                        <td class="px-4 py-3 text-center">
-                            <div class="flex items-center justify-center gap-1">
-                                <button onclick="openRuleModal(${rule.id})" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>
-                                <button onclick="deleteRule(${rule.id})" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            });
-        }
-
-        function exportData() {
-            if(transactions.length === 0) return;
-            
-            let csv = 'Post Date,Trans Date,Card,Merchant,Mapped Merchant,Category,Details,Amount (RM)\n';
-            transactions.forEach(t => {
-                csv += `"${t.postDate}","${t.transDate}","${t.cardInfo || ''}","${t.merchant}","${t.mappedMerchant || t.merchant}","${t.category}","${t.details}",${t.amount}\n`;
-            });
-
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.setAttribute('hidden', '');
-            a.setAttribute('href', url);
-            a.setAttribute('download', 'processed_statements.csv');
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-
-        function saveSetup(e) {
-            e.preventDefault();
-            sessionSettings.cfUrl = document.getElementById('cf-url').value;
-            sessionSettings.useAI = document.getElementById('use-ai-toggle').checked;
-            sessionSettings.aiModel = document.getElementById('ai-model-select').value;
-            
-            let msg = "Proxy Endpoint saved to session memory.";
-            if (sessionSettings.useAI) msg += ` AI Model (${sessionSettings.aiModel}) is live.`;
-            
-            showMessage(msg);
-        }
-
-        // --- Hybrid Local/Cloud Sync ---
-        async function cloudSyncAction(actionType) {
-            if(!sessionSettings.cfUrl) {
-                if (actionType === 'sync') {
-                    const backupData = { transactions, cashbacks, rules, appCategories };
-                    localStorage.setItem('zero_cost_backup', JSON.stringify(backupData));
-                    document.getElementById('sync-status-desk').innerText = "Just now (Local)";
-                    showMessage("Saved to local browser storage. Add Cloudflare URL in Setup for Cloud Sync.");
-                } else if (actionType === 'load') {
-                    const localData = localStorage.getItem('zero_cost_backup');
-                    if(localData) {
-                        try {
-                            const backup = JSON.parse(localData);
-                            transactions = backup.transactions || [];
-                            cashbacks = backup.cashbacks || [];
-                            rules = backup.rules || [];
-                            if (backup.appCategories) appCategories = backup.appCategories;
-                            renderCategories();
-                            renderAll();
-                            if(chartInstance) initChart();
-                            document.getElementById('sync-status-desk').innerText = "Just now (Local)";
-                            showMessage("Loaded from local browser storage.");
-                        } catch (e) {
-                            showMessage("Error reading local backup data.");
-                        }
-                    } else {
-                        showMessage("No local backup found.");
-                    }
-                }
-                return;
-            }
-
-            showMessage(`Initiating cloud ${actionType}...`);
-            
-            try {
-                const response = await fetch(sessionSettings.cfUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: actionType, 
-                        transactions: transactions,
-                        cashbacks: cashbacks,
-                        rules: rules,
-                        appCategories: appCategories
-                    })
-                });
-
-                if(!response.ok) {
-                    let errData;
-                    try { errData = await response.json(); } catch(e){}
-                    if (errData && errData.error) {
-                        throw new Error(`${errData.error} ${errData.troubleshooting || ''}`);
-                    }
-                    throw new Error(`Cloud ${actionType} proxy failed.`);
-                }
-                const data = await response.json();
-                
-                if (actionType === 'load' && data.backup) {
-                    transactions = data.backup.transactions || [];
-                    cashbacks = data.backup.cashbacks || [];
-                    rules = data.backup.rules || [];
-                    if (data.backup.appCategories) appCategories = data.backup.appCategories;
-                    renderCategories();
-                    renderAll();
-                    if(chartInstance) initChart();
-                    showMessage("Data successfully loaded from Cloud!");
-                } else if (actionType === 'sync') {
-                     showMessage("Data securely backed up to Cloud!");
-                }
-                
-                const desksync = document.getElementById('sync-status-desk');
-                if(desksync) desksync.innerText = "Just now (Cloud)";
-
-            } catch (err) {
-                showMessage("Sync Error: " + err.message);
-            }
-        }
-
-        // --- Interactive Interactive Chart Filtering ---
-        function initChart() {
-            const ctx = document.getElementById('spendingChart');
-            if(!ctx) return;
-
-            if (chartInstance) {
-                chartInstance.destroy();
-            }
-
-            const groupData = {};
-            transactions.forEach(t => {
-                const cat = t.category || "Uncategorized";
-                // FIX: Use absolute value. Negative numbers cause Doughnut charts to crash visually!
-                groupData[cat] = (groupData[cat] || 0) + Math.abs(t.amount); 
-            });
-
-            const labels = Object.keys(groupData);
-            const data = Object.values(groupData).map(val => parseFloat(val.toFixed(2)));
-
-            Chart.defaults.color = '#94a3b8';
-            Chart.defaults.font.family = 'Inter';
-
-            if (labels.length === 0) {
-                labels.push("No Data Available");
-                data.push(0);
-            }
-
-            chartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: [
-                            '#6366f1', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#64748b'
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#1e293b'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    // Interactive Chart UI features
-                    onHover: (event, chartElement) => {
-                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
-                    },
-                    onClick: (event, elements) => {
-                        if (elements.length > 0) {
-                            const index = elements[0].index;
-                            const category = chartInstance.data.labels[index];
-                            if(category !== "No Data Available") {
-                                document.getElementById('search-input').value = category;
-                                filterTransactions();
-                            }
-                        } else {
-                            // Clicked center/outside, reset filter
-                            document.getElementById('search-input').value = '';
-                            filterTransactions();
-                        }
-                    },
-                    plugins: {
-                        legend: { 
-                            position: 'bottom',
-                            labels: { boxWidth: 12, padding: 16 }
-                        }
-                    },
-                    cutout: '65%'
-                }
-            });
-        }
-
-        function showMessage(msg) {
-            const toast = document.createElement('div');
-            toast.className = 'fixed bottom-20 md:bottom-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg border border-slate-700 z-50 text-sm animate-bounce-in';
-            toast.innerText = msg;
-            document.body.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transition = 'opacity 0.3s';
-                setTimeout(() => document.body.removeChild(toast), 300);
-            }, 3000);
-        }
-
-    </script>
+})();
+</script>
 </body>
 </html>
