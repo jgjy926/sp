@@ -284,7 +284,8 @@
                 <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden" id="extraction-results">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                         <h3 class="font-semibold text-white" id="parsed-summary-title">Extracted Transactions</h3>
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 flex-wrap">
+                            <button id="enrich-ai-btn" class="text-xs bg-amber-900/30 hover:bg-amber-800/50 border border-amber-700/40 text-amber-300 px-3 py-1.5 rounded-lg transition-colors hidden flex items-center gap-1" onclick="triggerAiEnrichment()"><i class="ph ph-magic-wand"></i> Enrich with AI</button>
                             <button class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addRuleFromConsole()">+ Add Rule</button>
                             <button class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addManualTransaction()">+ Manual Entry</button>
                         </div>
@@ -370,20 +371,20 @@
 </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="glass-panel p-4 rounded-2xl border border-slate-700">
-                        <p class="text-xs text-slate-400 mb-1">Total Spent</p>
+                    <div class="glass-panel p-4 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/30 to-transparent">
+                        <p class="text-xs text-slate-400 mb-1 flex items-center gap-1"><i class="ph ph-currency-circle-dollar text-indigo-400"></i> Total Spent</p>
                         <p class="text-xl md:text-2xl font-bold text-white">RM <span id="stat-total">0.00</span></p>
                     </div>
-                    <div class="glass-panel p-4 rounded-2xl border border-slate-700">
-                        <p class="text-xs text-slate-400 mb-1">Transactions</p>
+                    <div class="glass-panel p-4 rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-950/30 to-transparent">
+                        <p class="text-xs text-slate-400 mb-1 flex items-center gap-1"><i class="ph ph-list-numbers text-purple-400"></i> Transactions</p>
                         <p class="text-xl md:text-2xl font-bold text-white" id="stat-count">0</p>
                     </div>
-                    <div class="glass-panel p-4 rounded-2xl border border-slate-700">
-                        <p class="text-xs text-slate-400 mb-1">Highest Spends</p>
+                    <div class="glass-panel p-4 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-950/30 to-transparent">
+                        <p class="text-xs text-slate-400 mb-1 flex items-center gap-1"><i class="ph ph-trophy text-amber-400"></i> Highest Spend</p>
                         <p class="text-sm font-medium text-white truncate" id="stat-high">--</p>
                     </div>
-                    <div class="glass-panel p-4 rounded-2xl border border-slate-700 flex flex-col justify-center">
-                        <button onclick="exportData()" class="flex items-center justify-center gap-2 w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white transition-colors border border-slate-600">
+                    <div class="glass-panel p-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/30 to-transparent flex flex-col justify-center">
+                        <button onclick="exportData()" class="flex items-center justify-center gap-2 w-full py-2 bg-emerald-900/30 hover:bg-emerald-800/40 rounded-lg text-emerald-300 transition-colors border border-emerald-700/40">
                             <i class="ph ph-export"></i> Export CSV
                         </button>
                     </div>
@@ -593,6 +594,7 @@
                         <div>
                             <label class="block text-sm text-slate-400 mb-1">Worker URL Endpoint</label>
                             <input type="url" id="cf-url" placeholder="https://parser.your-worker.workers.dev" class="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-primary transition-colors">
+                            <p class="text-xs text-slate-500 mt-1.5 flex items-center gap-1"><i class="ph ph-shield-check text-emerald-500"></i> Only merchant name tokens are sent to AI — no card numbers, dates, or amounts ever leave your browser.</p>
                         </div>
                     </div>
 
@@ -1123,22 +1125,20 @@ function resetPeriodFilter() {
       .replace(/'/g, '&#039;');
   }
 
-  function toast(msg) {
-    var old = document.querySelectorAll('.sp-runtime-toast');
-    old.forEach(function (x) { x.remove(); });
-
+  function toast(msg, type) {
+    document.querySelectorAll('.sp-runtime-toast').forEach(function (x) { x.remove(); });
+    type = type || 'info'; // 'info' | 'success' | 'error'
+    var colorMap = { success: 'border-emerald-600/50 text-emerald-300', error: 'border-red-600/50 text-red-300', info: 'border-slate-600 text-slate-200' };
+    var iconMap  = { success: 'ph-check-circle', error: 'ph-warning-circle', info: 'ph-info' };
     var div = document.createElement('div');
-    div.className = 'sp-runtime-toast fixed bottom-20 md:bottom-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg border border-slate-700 z-50 text-sm';
-    div.innerText = msg;
+    div.className = 'sp-runtime-toast fixed bottom-20 md:bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 px-4 py-2.5 rounded-xl shadow-2xl border z-50 text-sm flex items-center gap-2.5 max-w-sm ' + (colorMap[type] || colorMap.info);
+    div.style.cssText = 'transition:opacity 0.3s,transform 0.3s;transform:translateX(-50%) translateY(0)';
+    div.innerHTML = '<i class="ph ' + (iconMap[type] || iconMap.info) + ' text-base shrink-0"></i><span>' + String(msg).replace(/</g,'&lt;') + '</span>';
     document.body.appendChild(div);
-
     setTimeout(function () {
       div.style.opacity = '0';
-      div.style.transition = 'opacity 0.3s';
-      setTimeout(function () {
-        if (div.parentNode) div.parentNode.removeChild(div);
-      }, 300);
-    }, 3000);
+      setTimeout(function () { if (div.parentNode) div.parentNode.removeChild(div); }, 300);
+    }, 3500);
   }
 
   window.showMessage = toast;
@@ -1538,54 +1538,127 @@ function resetPeriodFilter() {
     }).filter(Boolean).join('\n');
   }
 
+  /**
+   * Privacy-first execution pipeline:
+   * 1. Parse locally with RegEx → full card/date/amount data stays on device.
+   * 2. Collect only UNRECOGNIZED merchant strings (not already in rules).
+   * 3. Tokenize them: assign a short temporary ID, strip everything else.
+   * 4. Send ONLY the token array to the Worker → Gemini enriches merchant names.
+   * 5. Stitch enriched names/categories back by token ID.
+   * 6. Auto-learn: create a new Rule for each AI enrichment so future imports
+   *    never call the AI for that merchant again.
+   */
   function executeTextParsing(rawText) {
     var statusBox = $('processing-status');
     var bar = $('process-bar');
+    var stepText = $('process-step');
 
-    if (sessionSettings.cfUrl) {
-      fetch(sessionSettings.cfUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'parse',
-          documentText: rawText,
-          useAI: sessionSettings.useAI,
-          aiModel: sessionSettings.aiModel,
-          existingCategories: appCategories
-        })
-      }).then(function (response) {
-        if (!response.ok) throw new Error('Worker responded with error status');
-        return response.json();
-      }).then(function (result) {
-        if (result.transactions && Array.isArray(result.transactions)) {
-          parseSourcedTransactions(JSON.stringify(result.transactions), rawText);
-        } else if (result.data) {
-          parseSourcedTransactions(result.data, rawText);
-        } else {
-          parseLocalTextRegex(rawText);
+    // Step 1: always run local parser first (card tracking, amounts, dates).
+    parseLocalTextRegex(rawText);
+
+    if (!sessionSettings.cfUrl || !sessionSettings.useAI) {
+      var score2 = $('confidence-score');
+      if (score2) score2.innerText = '95% (Local Parser)';
+      finishParsingUi(statusBox, bar);
+      return;
+    }
+
+    // Step 2: collect merchants not yet covered by a rule.
+    var unrecognized = [];
+    var seen = new Set();
+
+    transactions.forEach(function (t) {
+      if (t._aiEnriched) return; // already enriched
+      var ruleRes = runRuleEngineOnText(t.merchant);
+      if (!ruleRes.ruleMatched && t.merchant && !seen.has(t.merchant)) {
+        seen.add(t.merchant);
+        unrecognized.push({ id: String(t.id), raw: t.merchant });
+      }
+    });
+
+    if (unrecognized.length === 0) {
+      var sc = $('confidence-score');
+      if (sc) sc.innerText = '98% (Local + Rules)';
+      finishParsingUi(statusBox, bar);
+      return;
+    }
+
+    if (stepText) stepText.innerText = 'Enriching ' + unrecognized.length + ' merchants via AI (privacy-safe)…';
+    if (bar) bar.style.width = '92%';
+
+    // Step 3 & 4: send ONLY tokens to Worker.
+    fetch(sessionSettings.cfUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'parse',
+        merchantTokens: unrecognized,
+        aiModel: sessionSettings.aiModel,
+        existingCategories: appCategories
+      })
+    })
+    .then(function (response) {
+      if (!response.ok) throw new Error('Worker HTTP ' + response.status);
+      return response.json();
+    })
+    .then(function (result) {
+      if (result.status !== 'success' || !result.enriched) throw new Error(result.error || 'Empty enrichment response');
+
+      var enriched;
+      try {
+        enriched = typeof result.enriched === 'string' ? JSON.parse(result.enriched) : result.enriched;
+      } catch (e) { throw new Error('Could not parse AI enrichment response.'); }
+
+      if (!Array.isArray(enriched)) throw new Error('AI response was not an array.');
+
+      // Step 5: stitch back by id.
+      var enrichMap = {};
+      enriched.forEach(function (e) { if (e && e.id) enrichMap[String(e.id)] = e; });
+
+      transactions.forEach(function (t) {
+        var patch = enrichMap[String(t.id)];
+        if (!patch) return;
+
+        var cleanMerchant = patch.mappedMerchant || t.merchant;
+        var cleanCategory = patch.category || t.category || 'Uncategorized';
+
+        t.mappedMerchant = cleanMerchant;
+        t.category       = cleanCategory;
+        t._aiEnriched    = true;
+
+        // Step 6: auto-learn — add a permanent rule so this AI call is the last.
+        var alreadyHasRule = rules.some(function (r) {
+          return String(r.trigger || '').toUpperCase() === String(t.merchant || '').toUpperCase();
+        });
+        if (!alreadyHasRule && t.merchant && cleanMerchant !== t.merchant) {
+          rules.push({
+            id: Date.now() + Math.random(),
+            trigger: t.merchant,
+            mappedMerchant: cleanMerchant,
+            category: cleanCategory
+          });
         }
 
-        var score = $('confidence-score');
-        if (score) score.innerText = sessionSettings.useAI ? '99% (Hybrid AI + Local Card Map)' : '96% (Worker + Local Card Map)';
-        toast('Hybrid parse completed.');
-        finishParsingUi(statusBox, bar);
-      }).catch(function (err) {
-        toast('Worker error: ' + err.message + '. Falling back to local parser.');
-        parseLocalTextRegex(rawText);
-
-        var score = $('confidence-score');
-        if (score) score.innerText = '95% (Local Maybank Parser)';
-
-        finishParsingUi(statusBox, bar);
+        // Add new AI category to the global list if it's new.
+        if (cleanCategory && !appCategories.includes(cleanCategory) && cleanCategory !== 'Uncategorized') {
+          appCategories.push(cleanCategory);
+        }
       });
-    } else {
-      parseLocalTextRegex(rawText);
 
-      var score2 = $('confidence-score');
-      if (score2) score2.innerText = '95% (Local Maybank Parser)';
+      renderCategories();
+      renderRulesTable();
 
+      var score = $('confidence-score');
+      if (score) score.innerText = '99% (Local + AI Enriched)';
+      toast('AI enriched ' + enriched.length + ' merchant(s). Rules auto-learned.');
       finishParsingUi(statusBox, bar);
-    }
+    })
+    .catch(function (err) {
+      toast('AI enrichment failed: ' + err.message + '. Local parse retained.');
+      var score = $('confidence-score');
+      if (score) score.innerText = '95% (Local Parser — AI unavailable)';
+      finishParsingUi(statusBox, bar);
+    });
   }
 
   function finishParsingUi(statusBox, bar) {
@@ -1608,10 +1681,52 @@ function resetPeriodFilter() {
     }, 300);
   }
 
+  /**
+   * Manual AI enrichment trigger — allows user to re-run token enrichment
+   * after adding or modifying the Cloudflare Worker URL in Setup.
+   */
+  function triggerAiEnrichment() {
+    if (!sessionSettings.cfUrl || !sessionSettings.useAI) {
+      toast('Enable AI and configure the Worker URL in Setup first.', 'error');
+      return;
+    }
+    if (transactions.length === 0) {
+      toast('No transactions loaded. Parse a statement first.', 'error');
+      return;
+    }
+    // Reset _aiEnriched flags so all merchants are re-tokenized
+    transactions.forEach(function(t) { t._aiEnriched = false; });
+
+    var statusBox = $('processing-status');
+    var bar = $('process-bar');
+    var stepText = $('process-step');
+    if (statusBox) statusBox.classList.remove('hidden');
+    if (bar) bar.style.width = '80%';
+    if (stepText) stepText.innerText = 'Preparing merchant tokens…';
+
+    // Reuse the pipeline — it will collect uncovered merchants and call the Worker
+    setTimeout(function() { executeTextParsing(''); }, 100);
+  }
+
+  function updateEnrichButton() {
+    var btn = $('enrich-ai-btn');
+    if (!btn) return;
+    var hasPending = sessionSettings.useAI && transactions.some(function(t) {
+      return !t._aiEnriched && !runRuleEngineOnText(t.merchant).ruleMatched;
+    });
+    if (hasPending && sessionSettings.cfUrl) {
+      btn.classList.remove('hidden');
+    } else {
+      btn.classList.add('hidden');
+    }
+  }
+
   window.handleFileSelect = handleFileSelect;
   window.initPdfLoad = initPdfLoad;
   window.tryUnlockAndLoadPDF = tryUnlockAndLoadPDF;
   window.executeTextParsing = executeTextParsing;
+  window.triggerAiEnrichment = triggerAiEnrichment;
+  window.updateEnrichButton = updateEnrichButton;
 
   // -----------------------------
   // Maybank local structure parser
@@ -1963,12 +2078,6 @@ function parseSourcedTransactions(aiString, rawText) {
     }
 
     const localData = extractLocalStructure(rawText || '');
-
-console.log('LOCAL STRUCTURE QA', {
-  cards: Array.from(localData.cardsFound),
-  tx: localData.structuralTx,
-  cb: localData.structuralCb
-});
 
     updateInsightBanner(localData, 'Hybrid Local-AI');
 
@@ -2907,11 +3016,22 @@ function reparseRawTextFromPanel() {
           .concat(transactions.map(function(t) { return t.cardInfo || ''; }))
           .filter(Boolean)
       ));
-      chipContainer.innerHTML = knownCards.slice(0, 6).map(function(card) {
-        return '<button type="button" onclick="document.getElementById(\'cb-card\').value=\''+escapeHtml(card).replace(/'/g,"\\'")+'\'\'" ' +
-          'class="text-[11px] bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-2 py-1 rounded-lg transition-colors">' +
-          escapeHtml(card) + '</button>';
-      }).join('');
+      // SECURITY FIX: avoid interpolating card data into onclick attribute strings.
+      // Use data-value + a single delegated listener instead, which is XSS-safe
+      // regardless of what characters the card label contains.
+      chipContainer.innerHTML = '';
+      knownCards.slice(0, 6).forEach(function(card) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-[11px] bg-slate-800 border border-slate-700 hover:border-emerald-500 text-slate-300 hover:text-white px-2 py-1 rounded-lg transition-colors';
+        btn.dataset.cardValue = card;
+        btn.textContent = card;
+        btn.addEventListener('click', function() {
+          var cbCard = document.getElementById('cb-card');
+          if (cbCard) cbCard.value = this.dataset.cardValue;
+        });
+        chipContainer.appendChild(btn);
+      });
     }
 
     // Clear or prefill
@@ -3062,24 +3182,34 @@ function reparseRawTextFromPanel() {
 
     if (transactions.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="4" class="p-8 text-center text-slate-500 text-sm">No transactions parsed yet. Upload a statement to get started.</td></tr>';
+        '<tr><td colspan="4" class="p-12 text-center">' +
+        '<div class="flex flex-col items-center gap-3">' +
+        '<div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center"><i class="ph ph-file-arrow-up text-2xl text-slate-500"></i></div>' +
+        '<p class="text-slate-400 text-sm font-medium">No transactions yet</p>' +
+        '<p class="text-slate-500 text-xs">Upload a PDF or paste statement text above to get started.</p>' +
+        '</div></td></tr>';
       return;
     }
 
+    var rows = [];
     transactions.forEach(function (t) {
-      tbody.innerHTML +=
+      var needsAI = !t._aiEnriched && sessionSettings.cfUrl && sessionSettings.useAI;
+      rows.push(
         '<tr class="hover:bg-slate-800/50 transition-colors">' +
         '<td class="px-4 py-3 whitespace-nowrap">' +
         '<div class="text-white font-mono text-xs">' + escapeHtml(t.postDate) + '</div>' +
         (t.transDate && t.transDate !== t.postDate
           ? '<div class="text-[10px] text-slate-500 font-mono">T: ' + escapeHtml(t.transDate) + '</div>'
           : '') +
-        '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
+        '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block truncate max-w-[140px]">' +
         escapeHtml(t.cardInfo || 'Unknown') +
         '</div>' +
         '</td>' +
         '<td class="px-4 py-3">' +
-        '<div class="font-medium text-white">' + escapeHtml(t.mappedMerchant || t.merchant) + '</div>' +
+        '<div class="font-medium text-white flex items-center gap-1.5">' +
+        escapeHtml(t.mappedMerchant || t.merchant) +
+        (needsAI ? '<span class="text-[9px] bg-amber-900/40 text-amber-400 border border-amber-700/40 px-1.5 py-0.5 rounded-full shrink-0">AI pending</span>' : '') +
+        '</div>' +
         '<div class="flex gap-2 items-center mt-1">' +
         '<span class="text-xs text-slate-500 truncate max-w-xs">' + escapeHtml(t.merchant) + '</span>' +
         '<span class="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded">' +
@@ -3091,8 +3221,11 @@ function reparseRawTextFromPanel() {
         '<td class="px-4 py-3 text-center">' +
         '<button onclick="openEditModal(' + t.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>' +
         '</td>' +
-        '</tr>';
+        '</tr>'
+      );
     });
+    tbody.innerHTML = rows.join('');
+    updateEnrichButton();
   }
 
   function filterTransactions() {
@@ -3133,33 +3266,30 @@ function reparseRawTextFromPanel() {
       return;
     }
 
+    var dRows = [], mRows = [];
     filtered.forEach(function (t) {
-      desktopBody.innerHTML +=
+      dRows.push(
         '<tr class="hover:bg-slate-800/50 transition-colors">' +
         '<td class="px-4 py-3 whitespace-nowrap">' +
         '<div class="text-slate-200 font-mono text-xs">' + escapeHtml(t.postDate) + '</div>' +
         (t.transDate && t.transDate !== t.postDate
           ? '<div class="text-[10px] text-slate-500 font-mono">T: ' + escapeHtml(t.transDate) + '</div>'
           : '') +
-        '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
+        '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block truncate max-w-[140px]">' +
         escapeHtml(resolveCardLabel(t.cardInfo || 'Unknown')) +
-        '</div>' +
-        '</td>' +
+        '</div></td>' +
         '<td class="px-4 py-3 font-medium text-white">' + escapeHtml(t.mappedMerchant || t.merchant) + '</td>' +
         '<td class="px-4 py-3">' +
         '<span class="text-[11px] bg-slate-800 px-2 py-1 rounded border border-slate-700 text-indigo-300">' + escapeHtml(t.category) + '</span>' +
         (t.details ? '<div class="text-xs text-slate-500 mt-1">' + escapeHtml(t.details) + '</div>' : '') +
         '</td>' +
         '<td class="px-4 py-3 text-right font-medium text-white">' + money(t.amount) + '</td>' +
-        '<td class="px-4 py-3 text-center">' +
-        '<div class="flex items-center justify-center gap-1.5">' +
+        '<td class="px-4 py-3 text-center"><div class="flex items-center justify-center gap-1.5">' +
         '<button onclick="openEditModal(' + t.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"><i class="ph ph-pencil-simple"></i></button>' +
         '<button onclick="deleteTransaction(' + t.id + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors"><i class="ph ph-trash"></i></button>' +
-        '</div>' +
-        '</td>' +
-        '</tr>';
-
-      mobileList.innerHTML +=
+        '</div></td></tr>'
+      );
+      mRows.push(
         '<div class="p-4 hover:bg-slate-800/30 transition-colors">' +
         '<div class="flex justify-between items-start mb-2">' +
         '<div class="font-medium text-white leading-tight pr-4">' + escapeHtml(t.mappedMerchant || t.merchant) + '</div>' +
@@ -3175,10 +3305,11 @@ function reparseRawTextFromPanel() {
         '</div>' +
         '<div class="flex gap-2">' +
         '<button onclick="openEditModal(' + t.id + ')" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"><i class="ph ph-pencil-simple"></i></button>' +
-        '</div>' +
-        '</div>' +
-        '</div>';
+        '</div></div></div>'
+      );
     });
+    desktopBody.innerHTML = dRows.join('');
+    mobileList.innerHTML  = mRows.join('');
   }
 
   function renderAnalyticsCards() {
@@ -3249,10 +3380,11 @@ function reparseRawTextFromPanel() {
         '<div class="col-span-4 text-center text-slate-500 text-sm py-4">No cashback entries for the selected period.</div>';
     } else {
       var activeCard = cbSearch ? cbSearch.value.trim() : '';
+      var cbCards = [];
       Object.keys(grouped).forEach(function (card) {
         var amount = grouped[card];
         var isActive = activeCard === card;
-        container.innerHTML +=
+        cbCards.push(
           '<div onclick="filterCashbackByCard(\'' + escapeHtml(card).replace(/'/g, "\\'") + '\')" ' +
           'class="glass-panel p-4 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all ' +
           (isActive ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/40' : 'border-slate-700 hover:border-emerald-700/50') + '">' +
@@ -3262,8 +3394,10 @@ function reparseRawTextFromPanel() {
           (isActive ? '<i class="ph ph-x-circle ml-auto text-emerald-400 shrink-0" title="Clear filter"></i>' : '') +
           '</div>' +
           '<div class="text-2xl font-bold text-emerald-400">RM ' + money(amount) + '</div>' +
-          '</div>';
+          '</div>'
+        );
       });
+      container.innerHTML = cbCards.join('');
     }
 
     if (filtered.length === 0) {
@@ -3274,24 +3408,24 @@ function reparseRawTextFromPanel() {
       return;
     }
 
+    var cbItems = [];
     filtered.slice().reverse().forEach(function (c) {
-      list.innerHTML +=
+      cbItems.push(
         '<li class="p-4 flex justify-between items-center hover:bg-slate-800/30 transition-colors group">' +
         '<div class="flex-1 min-w-0 pr-4">' +
         '<div class="font-medium text-white truncate">' + escapeHtml(c.merchant) + '</div>' +
         '<div class="text-xs text-slate-400 mt-0.5">' + escapeHtml(c.date) +
         ' &bull; <span class="text-slate-500">' + escapeHtml(resolveCardLabel(c.card || c.cardInfo || 'Unknown')) + '</span>' +
-        '</div>' +
-        '</div>' +
+        '</div></div>' +
         '<div class="flex items-center gap-3 shrink-0">' +
         '<div class="font-bold text-emerald-400">+ RM ' + money(c.amount) + '</div>' +
         '<div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">' +
         '<button onclick="openCashbackModal(' + c.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors" title="Edit"><i class="ph ph-pencil-simple text-xs"></i></button>' +
         '<button onclick="deleteCashback(' + c.id + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400 transition-colors" title="Delete"><i class="ph ph-trash text-xs"></i></button>' +
-        '</div>' +
-        '</div>' +
-        '</li>';
+        '</div></div></li>'
+      );
     });
+    list.innerHTML = cbItems.join('');
   }
 
   // -----------------------------
@@ -3406,43 +3540,37 @@ function reparseRawTextFromPanel() {
       return;
     }
 
+    var ruleRows = [];
     rules.forEach(function (rule) {
-      tbody.innerHTML +=
+      // SECURITY FIX: rule.id may be a non-numeric string when restored from backup.
+      // Coerce it to a safe token (digits and dots only) before embedding in HTML attributes.
+      var safeId = String(rule.id || '').replace(/[^0-9.]/g, '');
+      ruleRows.push(
         '<tr class="hover:bg-slate-800/50 transition-colors">' +
         '<td class="px-4 py-3 font-mono text-slate-300 font-semibold text-xs select-all bg-slate-900/40">' + escapeHtml(rule.trigger) + '</td>' +
         '<td class="px-4 py-3 font-medium text-white">' + escapeHtml(rule.mappedMerchant) + '</td>' +
-        '<td class="px-4 py-3">' +
-        '<span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">' + escapeHtml(rule.category) + '</span>' +
-        '</td>' +
-        '<td class="px-4 py-3 text-center">' +
-        '<div class="flex items-center justify-center gap-1">' +
-        '<button onclick="openRuleModal(' + rule.id + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>' +
-        '<button onclick="deleteRule(' + rule.id + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>' +
-        '</div>' +
-        '</td>' +
-        '</tr>';
+        '<td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-xs bg-indigo-950 text-indigo-300 border border-indigo-900">' + escapeHtml(rule.category) + '</span></td>' +
+        '<td class="px-4 py-3 text-center"><div class="flex items-center justify-center gap-1">' +
+        '<button onclick="openRuleModal(' + safeId + ')" class="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" title="Edit"><i class="ph ph-pencil-simple"></i></button>' +
+        '<button onclick="deleteRule(' + safeId + ')" class="p-1.5 rounded bg-red-900/20 hover:bg-red-900/50 text-red-400" title="Delete"><i class="ph ph-trash"></i></button>' +
+        '</div></td></tr>'
+      );
     });
+    tbody.innerHTML = ruleRows.join('');
   }
 
   function setDateMode(mode) {
     selectedDateMode = mode;
 
-    // Update toggle button styles
+    // Rebuild toggle styles cleanly — avoid fragile string-replace approach
     var postBtn = document.getElementById('date-mode-post-btn');
     var transBtn = document.getElementById('date-mode-trans-btn');
+    var BASE = 'px-3 py-1.5 rounded-xl text-xs font-medium transition-all';
     if (postBtn && transBtn) {
-      if (mode === 'post') {
-        postBtn.className = postBtn.className.replace('text-slate-400 hover:text-white', 'bg-primary text-white');
-        transBtn.className = transBtn.className.replace('bg-primary text-white', 'text-slate-400 hover:text-white');
-        if (!postBtn.className.includes('bg-primary')) postBtn.className += ' bg-primary text-white';
-      } else {
-        transBtn.className = transBtn.className.replace('text-slate-400 hover:text-white', 'bg-primary text-white');
-        postBtn.className = postBtn.className.replace('bg-primary text-white', 'text-slate-400 hover:text-white');
-        if (!transBtn.className.includes('bg-primary')) transBtn.className += ' bg-primary text-white';
-      }
+      postBtn.className  = BASE + (mode === 'post'  ? ' bg-primary text-white' : ' text-slate-400 hover:text-white');
+      transBtn.className = BASE + (mode === 'trans' ? ' bg-primary text-white' : ' text-slate-400 hover:text-white');
     }
 
-    // Rebuild dropdowns with the new date basis, then re-render
     renderPeriodFilters();
     renderAll();
   }
@@ -3593,9 +3721,36 @@ function reparseRawTextFromPanel() {
   function saveSetup(e) {
     if (e) e.preventDefault();
 
-    sessionSettings.cfUrl = $('cf-url') ? $('cf-url').value.trim() : '';
+    // SECURITY FIX: validate the Worker URL before storing it.
+    // Only HTTPS URLs are accepted; javascript: / data: / relative paths are rejected
+    // to prevent fetch() being aimed at attacker-controlled or inline JS endpoints.
+    var rawUrl = $('cf-url') ? $('cf-url').value.trim() : '';
+    if (rawUrl) {
+      try {
+        var parsed = new URL(rawUrl);
+        if (parsed.protocol !== 'https:') {
+          toast('Worker URL must use HTTPS. Please correct the URL in Setup.');
+          return;
+        }
+      } catch (_) {
+        toast('Worker URL is not a valid URL. Please correct it in Setup.');
+        return;
+      }
+    }
+    sessionSettings.cfUrl = rawUrl;
     sessionSettings.useAI = $('use-ai-toggle') ? $('use-ai-toggle').checked : false;
-    sessionSettings.aiModel = $('ai-model-select') ? $('ai-model-select').value : 'gemini-2.5-flash';
+
+    // SECURITY FIX: validate aiModel against a strict allowlist so a tampered DOM
+    // or restored backup cannot inject an arbitrary path segment into the Gemini URL.
+    var ALLOWED_MODELS = new Set([
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ]);
+    var rawModel = $('ai-model-select') ? $('ai-model-select').value : 'gemini-2.5-flash';
+    sessionSettings.aiModel = ALLOWED_MODELS.has(rawModel) ? rawModel : 'gemini-2.5-flash';
 
     var msg = 'Settings saved to session memory.';
     if (sessionSettings.useAI) msg += ' AI model: ' + sessionSettings.aiModel + '.';
@@ -3627,11 +3782,30 @@ function reparseRawTextFromPanel() {
           try {
             var backup = JSON.parse(localData);
 
-            transactions = backup.transactions || [];
-            cashbacks = backup.cashbacks || [];
-            rules = backup.rules || [];
-            appCategories = backup.appCategories || appCategories;
-            cardMappings = backup.cardMappings || {};
+            // SECURITY FIX: sanitize each array/object from the backup before assigning.
+            // A tampered localStorage entry could carry __proto__ or constructor keys
+            // that pollute Object.prototype (prototype pollution attack).
+            function safeArray(val) {
+              return Array.isArray(val)
+                ? val.filter(function(item) { return item !== null && typeof item === 'object' && !Array.isArray(item); })
+                : [];
+            }
+            function safeObject(val) {
+              if (!val || typeof val !== 'object' || Array.isArray(val)) return {};
+              var safe = Object.create(null);
+              Object.keys(val).forEach(function(k) {
+                if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') {
+                  safe[k] = val[k];
+                }
+              });
+              return safe;
+            }
+
+            transactions    = safeArray(backup.transactions);
+            cashbacks       = safeArray(backup.cashbacks);
+            rules           = safeArray(backup.rules);
+            appCategories   = Array.isArray(backup.appCategories) ? backup.appCategories.filter(function(c) { return typeof c === 'string'; }) : appCategories;
+            cardMappings    = safeObject(backup.cardMappings);
 
             renderCategories();
             renderAll();
@@ -3674,11 +3848,25 @@ function reparseRawTextFromPanel() {
       var data = await response.json();
 
       if (actionType === 'load' && data.backup) {
-        transactions = data.backup.transactions || [];
-        cashbacks = data.backup.cashbacks || [];
-        rules = data.backup.rules || [];
-        appCategories = data.backup.appCategories || appCategories;
-        cardMappings = data.backup.cardMappings || {};
+        // SECURITY FIX: apply same prototype-pollution-safe sanitization as local load.
+        function safeArrayCloud(val) {
+          return Array.isArray(val)
+            ? val.filter(function(item) { return item !== null && typeof item === 'object' && !Array.isArray(item); })
+            : [];
+        }
+        function safeObjectCloud(val) {
+          if (!val || typeof val !== 'object' || Array.isArray(val)) return {};
+          var safe = Object.create(null);
+          Object.keys(val).forEach(function(k) {
+            if (k !== '__proto__' && k !== 'constructor' && k !== 'prototype') safe[k] = val[k];
+          });
+          return safe;
+        }
+        transactions  = safeArrayCloud(data.backup.transactions);
+        cashbacks     = safeArrayCloud(data.backup.cashbacks);
+        rules         = safeArrayCloud(data.backup.rules);
+        appCategories = Array.isArray(data.backup.appCategories) ? data.backup.appCategories.filter(function(c) { return typeof c === 'string'; }) : appCategories;
+        cardMappings  = safeObjectCloud(data.backup.cardMappings);
 
         renderCategories();
         renderAll();
