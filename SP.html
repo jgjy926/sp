@@ -281,13 +281,14 @@
 </div>
 
 
-                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden" id="extraction-results">
+                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden hidden" id="extraction-results">
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
                         <h3 class="font-semibold text-white" id="parsed-summary-title">Extracted Transactions</h3>
                         <div class="flex gap-2 flex-wrap">
                             <button id="enrich-ai-btn" class="text-xs bg-amber-900/30 hover:bg-amber-800/50 border border-amber-700/40 text-amber-300 px-3 py-1.5 rounded-lg transition-colors hidden flex items-center gap-1" onclick="triggerAiEnrichment()"><i class="ph ph-magic-wand"></i> Enrich with AI</button>
                             <button class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addRuleFromConsole()">+ Add Rule</button>
                             <button class="text-xs bg-primary hover:bg-secondary text-white px-3 py-1.5 rounded-lg transition-colors" onclick="addManualTransaction()">+ Manual Entry</button>
+                            <button class="text-xs bg-red-900/30 hover:bg-red-900/60 border border-red-700/40 text-red-400 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1" onclick="clearConsole()"><i class="ph ph-trash"></i> Clear</button>
                         </div>
                     </div>
 
@@ -529,6 +530,16 @@
                                 <tr><td colspan="4" class="p-6 text-center text-slate-500 text-xs">Parse a statement to populate card mappings.</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                    <!-- Manual card entry row -->
+                    <div class="border-t border-slate-700 bg-slate-800/30 p-3 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                        <input type="text" id="manual-card-raw" placeholder="Raw card name (e.g. CIMB VISA **** 1234)"
+                            class="flex-1 bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-primary transition-colors">
+                        <input type="text" id="manual-card-label" placeholder="Display label (e.g. My CIMB Visa)"
+                            class="flex-1 bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-500 transition-colors">
+                        <button onclick="addManualCardMapping()" class="shrink-0 px-3 py-2 bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-700/50 text-emerald-300 text-xs rounded-lg transition-colors flex items-center gap-1.5">
+                            <i class="ph ph-plus-bold"></i> Add Card
+                        </button>
                     </div>
                 </div>
 
@@ -1661,6 +1672,49 @@ function resetPeriodFilter() {
     });
   }
 
+  function clearConsole() {
+    if (transactions.length === 0 && cashbacks.length === 0) {
+      toast('Nothing to clear.');
+      return;
+    }
+    if (!confirm('Clear all parsed transactions and cashback entries from this session? Rules and card mappings are kept.')) return;
+
+    transactions = [];
+    cashbacks = [];
+    selectedFileBuffer = null;
+    selectedFileName = '';
+
+    // Hide results panel and raw text inspector; restore drop zone
+    var resultsPanel = $('extraction-results');
+    var rawPanel     = $('raw-text-panel');
+    var rawOutput    = $('raw-text-output');
+    var dropZone     = $('drop-zone');
+    var fileInput    = $('file-input');
+    var insight      = $('global-doc-insight');
+    var statusBox    = $('processing-status');
+
+    if (resultsPanel) resultsPanel.classList.add('hidden');
+    if (rawPanel)     rawPanel.classList.add('hidden');
+    if (rawOutput)    rawOutput.value = '';
+    if (dropZone)     dropZone.classList.remove('hidden');
+    if (fileInput)    fileInput.value = '';
+    if (insight)      insight.classList.add('hidden');
+    if (statusBox)    statusBox.classList.add('hidden');
+
+    var score = $('confidence-score');
+    if (score) score.innerText = '--%';
+
+    var title = $('parsed-summary-title');
+    if (title) title.innerText = 'Extracted Transactions';
+
+    renderAll();
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    toast('Console cleared. Upload a new statement to start fresh.');
+  }
+
+  window.clearConsole = clearConsole;
+
   function finishParsingUi(statusBox, bar) {
     if (bar) bar.style.width = '100%';
 
@@ -1754,9 +1808,18 @@ function resetPeriodFilter() {
     }
 
     function normalizeProduct(productText) {
+      // Strip the detected bank name words from the product string so non-Maybank
+      // banks don't produce doubled names like "CIMB CIMB VISA ****1234".
+      var bankWords = (globalBankName || 'MAYBANK')
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .split(/\s+/)
+        .filter(function(w) { return w.length > 2; })
+        .join('|');
+      var bankRx = new RegExp('\\b(?:' + bankWords + ')\\b', 'gi');
       return String(productText || '')
         .replace(/\s+/g, ' ')
-        .replace(/\bMAYBANK\b/i, '')
+        .replace(bankRx, '')
+        .replace(/\s+/g, ' ')
         .trim();
     }
 
@@ -3520,6 +3583,37 @@ function reparseRawTextFromPanel() {
     renderAnalyticsCards();
     if (currentTab === 'analytics' && typeof initChart === 'function') initChart();
   }
+
+  function addManualCardMapping() {
+    var rawInput   = $('manual-card-raw');
+    var labelInput = $('manual-card-label');
+    var rawCard    = rawInput  ? rawInput.value.trim()  : '';
+    var label      = labelInput ? labelInput.value.trim() : '';
+
+    if (!rawCard) { toast('Please enter a raw card name.', 'error'); return; }
+
+    // Register the raw name so it appears as a real card in the mapping table
+    registerCardMapping(rawCard);
+
+    // If a label was given, immediately persist it
+    if (label) {
+      var key = cardKey(rawCard);
+      cardMappings[key] = label;
+    }
+
+    if (rawInput)   rawInput.value   = '';
+    if (labelInput) labelInput.value = '';
+
+    renderCardMappings();
+    renderCashback();
+    renderMasterTransactions();
+    renderAnalyticsCards();
+    if (currentTab === 'analytics' && typeof initChart === 'function') initChart();
+
+    toast('Card entry added' + (label ? ' with label "' + label + '".' : '. You can now set its display label.'));
+  }
+
+  window.addManualCardMapping = addManualCardMapping;
 
   window.renderCardMappings = renderCardMappings;
   window.saveCardMapping = saveCardMapping;
