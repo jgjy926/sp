@@ -1126,6 +1126,15 @@
         Object.keys(parserConfig).forEach(function(k) {
           if (Object.prototype.hasOwnProperty.call(obj, k)) parserConfig[k] = obj[k];
         });
+        // Sanitize bankHeaderOverrides: remove any entries whose regex is invalid
+        if (parserConfig.bankHeaderOverrides && parserConfig.bankHeaderOverrides.trim()) {
+          var validPairs = parserConfig.bankHeaderOverrides.split(',').filter(function(pair) {
+            var ci = pair.indexOf(':');
+            if (ci < 1) return false;
+            try { new RegExp(pair.slice(ci + 1).trim(), 'gis'); return true; } catch(e) { return false; }
+          });
+          parserConfig.bankHeaderOverrides = validPairs.join(',');
+        }
       }
     } catch(e) {}
   }
@@ -3275,6 +3284,7 @@ function reparseRawTextFromPanel() {
         var oId  = pair.slice(0, colonIdx).trim().toLowerCase().replace(/\s+/g, '');
         var oRx  = pair.slice(colonIdx + 1).trim();
         if (bankIdLower.indexOf(oId) !== -1 || oId.indexOf(bankIdLower) !== -1) {
+          try { new RegExp(oRx, 'gis'); } catch(e) { continue; } // skip invalid regex
           return oRx; // user-supplied regex wins
         }
       }
