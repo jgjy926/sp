@@ -3353,10 +3353,11 @@ function reparseRawTextFromPanel() {
           'data-key="' + escapeHtml(key) + '" data-raw="' + escapeHtml(longestRaw) + '" ' +
           'class="w-full bg-slate-900 border ' + (isDirty ? 'border-emerald-600' : 'border-slate-700') + ' text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary transition-colors" ' +
           'oninput="onCardLabelInput(this)" ' +
-          'onkeydown="if(event.key==='Enter')saveCardMapping(this.dataset.key,this.value)">' +
+          'onkeydown="if(event.key===&quot;Enter&quot;)saveCardMapping(this.dataset.key,this.value)">' +
         '</td>' +
         '<td class="px-4 py-3 text-center">' +
-          '<button onclick="saveCardMapping('' + escapeHtml(key).replace(/'/g,"\'") + '',document.getElementById('' + inputId + '').value)" ' +
+          '<button data-key="' + escapeHtml(key) + '" data-input="' + inputId + '" ' +
+          'onclick="saveCardMapping(this.dataset.key,document.getElementById(this.dataset.input).value)" ' +
           'class="px-2.5 py-1 bg-emerald-900/30 hover:bg-emerald-800/50 border border-emerald-700/50 text-emerald-300 text-xs rounded-lg transition-colors">Save</button>' +
         '</td>' +
         '</tr>';
