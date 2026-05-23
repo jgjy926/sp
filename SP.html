@@ -1795,7 +1795,10 @@ function resetPeriodFilter() {
       .replace(/[ \t]+/g, ' ')
       .replace(/\n+/g, '\n');
 
-    var globalBankName = window.detectBankFromText ? window.detectBankFromText(normalized) : 'Unidentified Bank';
+    // BUG FIX: call detectBankFromText directly (same IIFE scope).
+    // window.detectBankFromText is only assigned later in the script, so the
+    // window.* guard always fell back to 'Unidentified Bank' on first call.
+    var globalBankName = detectBankFromText(normalized);
 
     function cleanCardDigits(cardText) {
       return String(cardText || '').replace(/\D/g, '');
@@ -1844,7 +1847,9 @@ function resetPeriodFilter() {
     // not yet assigned when extractLocalStructure first runs, causing the fallback Maybank-only
     // pattern to be used for every non-Maybank bank.
     var cardHeaderPattern = buildCardHeaderPattern(globalBankName);
-    var sectionRegex = new RegExp(cardHeaderPattern, 'gi');
+    // BUG FIX: use 'gis' (dotAll) flag so the card-header regex matches even when
+    // the owner name and card number span across a reconstructed newline boundary.
+    var sectionRegex = new RegExp(cardHeaderPattern, 'gis');
 
     var sections = [];
     var sectionMatch;
@@ -1873,127 +1878,144 @@ function resetPeriodFilter() {
 
 function parseTransactionsInBlock(blockText, cardInfo) {
   /**
-   * Safer line-based parser.
-   * Reason:
-   * - Maybank AMEX transactions can sit after page footer/header noise.
-   * - A giant cross-block regex can fail around page boundaries or final rows.
-   * - This parser scans each reconstructed line independently.
+   * Dynamic line-based parser — handles PDFs where transactions appear on
+   * pages AFTER the card-header page (e.g. page 1 has card info, page 3 has rows).
+   *
+   * Strategy:
+   * 1. Normalise the block text.
+   * 2. Pre-split: inject newlines before any date-pattern that starts mid-line
+   *    WITHOUT using lookbehind (Safari/older Edge don't support it reliably).
+   * 3. Try dual-date row format: DD/MM[/YY] DD/MM[/YY] DESC AMOUNT  (Maybank/CIMB/PBB)
+   * 4. Fallback single-date format: DD/MM[/YY] DESC AMOUNT           (some RHB/HLB)
+   * 5. Foreign-currency: keep last numeric token as RM amount.
+   * 6. Skip noise lines (headers, totals, interest lines, page footers).
    */
 
+  var DATE_PAT  = '\\d{2}\\/\\d{2}(?:\\/\\d{2,4})?';
+  var AMT_PAT   = '(\\d{1,3}(?:,\\d{3})*\\.\\d{2}(?:CR|DR)?)';
 
-const lines = String(blockText || '')
-  .replace(/\r/g, '\n')
-  .replace(/(?<!\d)(?=\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Z])/g, '\n')
-  .split('\n')
-    .map(line => line.replace(/[ \t]+/g, ' ').trim())
+  // Dual-date: DD/MM[/YY] DD/MM[/YY] DESCRIPTION AMOUNT
+  var DUAL_RX = new RegExp(
+    '^(' + DATE_PAT + ')\\s+(' + DATE_PAT + ')\\s+(.+?)\\s+' + AMT_PAT + '$', 'i'
+  );
+  // Dual-date FX: DD/MM[/YY] DD/MM[/YY] DESC CUR 12.34 RM AMOUNT
+  var DUAL_FX_RX = new RegExp(
+    '^(' + DATE_PAT + ')\\s+(' + DATE_PAT + ')\\s+(.+?)\\s+(?:[A-Z]{2,3}\\s+[\\d,]+\\.\\d{2}\\s+)?' + AMT_PAT + '$', 'i'
+  );
+  // Single-date: DD/MM[/YY] DESCRIPTION AMOUNT
+  var SINGLE_RX = new RegExp(
+    '^(' + DATE_PAT + ')\\s+(.+?)\\s+' + AMT_PAT + '$', 'i'
+  );
+  // Single-date FX fallback
+  var SINGLE_FX_RX = new RegExp(
+    '^(' + DATE_PAT + ')\\s+(.+?)\\s+(?:[A-Z]{2,3}\\s+[\\d,]+\\.\\d{2}\\s+)?' + AMT_PAT + '$', 'i'
+  );
+
+  // Noise patterns — lines to skip regardless of format
+  var NOISE_RX = /RETAIL INTEREST RATE|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|JUMLAH|BALANCE B\/F|BALANCE C\/F|MINIMUM PAYMENT|CREDIT LIMIT|AVAILABLE CREDIT|STATEMENT DATE|PAGE \d|POSTING DATE|TRANS(?:ACTION)? DATE/i;
+
+  // Pre-inject newlines before date-pairs that run together (no lookbehind — compatible)
+  // Replace "  DD/MM DD/MM " runs that are preceded by a non-digit/slash character.
+  var raw = String(blockText || '')
+    .replace(/\r/g, '\n')
+    // Split where a date-pair starts after a non-date character mid-line
+    .replace(/([^\d\/\n])\s*(\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z])/g,
+             function(_, pre, dateStart) { return pre + '\n' + dateStart; })
+    // Also split where a single-date starts after non-date content
+    .replace(/([^\d\/\n])\s*(\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z]{2,})/g,
+             function(_, pre, dateStart) { return pre + '\n' + dateStart; });
+
+  var lines = raw.split('\n')
+    .map(function(l) { return l.replace(/[ \t]+/g, ' ').trim(); })
     .filter(Boolean);
 
-  // Matches DD/MM or DD/MM/YY or DD/MM/YYYY for both Maybank and CIMB/PBB style
-  const rowRegex =
-    /^(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(.+?)\s+(\d{1,3}(?:,\d{3})*\.\d{2}(?:CR|DR)?)$/i;
+  var DUAL_DATE_START = /^\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+/;
+  var SINGLE_DATE_START = /^\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z]/;
 
-  for (let rawLine of lines) {
-    const line = rawLine.trim();
+  for (var li = 0; li < lines.length; li++) {
+    var line = lines[li];
 
-    // Skip obvious non-transaction rows.
-    if (
-      !/^\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+/.test(line) ||
-      line.includes('RETAIL INTEREST RATE') ||
-      line.includes('TOTAL CREDIT') ||
-      line.includes('TOTAL DEBIT') ||
-      line.includes('SUB TOTAL') ||
-      line.includes('JUMLAH')
-    ) {
-      continue;
+    // Skip obvious noise
+    if (NOISE_RX.test(line)) continue;
+
+    var isDual   = DUAL_DATE_START.test(line);
+    var isSingle = !isDual && SINGLE_DATE_START.test(line);
+    if (!isDual && !isSingle) continue;
+
+    var txMatch = null;
+    var postDate, transDate, rawDesc, rawAmount;
+
+    if (isDual) {
+      txMatch = line.match(DUAL_RX) || line.match(DUAL_FX_RX);
+      if (!txMatch) continue;
+      postDate  = txMatch[1].slice(0, 5);
+      transDate = txMatch[2].slice(0, 5);
+      rawDesc   = txMatch[3].replace(/\s+/g, ' ').trim().toUpperCase();
+      rawAmount = txMatch[4];
+    } else {
+      // Single-date — some statements use only one date column
+      txMatch = line.match(SINGLE_RX) || line.match(SINGLE_FX_RX);
+      if (!txMatch) continue;
+      postDate  = txMatch[1].slice(0, 5);
+      transDate = postDate; // no second date available
+      rawDesc   = txMatch[2].replace(/\s+/g, ' ').trim().toUpperCase();
+      rawAmount = txMatch[3];
     }
 
-    let txMatch = line.match(rowRegex);
+    var isCredit = /CR$/i.test(rawAmount);
+    var isDebit  = /DR$/i.test(rawAmount);
+    var amount   = parseFloat(rawAmount.replace(/(?:CR|DR)$/i, '').replace(/,/g, ''));
 
-    // Foreign currency fallback: "DD/MM DD/MM DESC USD 12.34 RM 567.89"
-    // Take the last monetary amount on the line (RM/MYR amount)
-    if (!txMatch) {
-      const fxMatch = line.match(
-        /^(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(.+?)\s+(?:[A-Z]{2,3}\s+[\d,]+\.\d{2}\s+)?(\d{1,3}(?:,\d{3})*\.\d{2}(?:CR|DR)?)$/i
-      );
-      if (fxMatch) txMatch = fxMatch;
-    }
+    if (!amount || amount <= 0) continue;
 
-    if (!txMatch) {
-      continue;
-    }
+    var isSpaylaterOrInstalment =
+      rawDesc.indexOf('SPAYLATER')        !== -1 ||
+      rawDesc.indexOf('INSTALMENT')       !== -1 ||
+      rawDesc.indexOf('INSTALLMENT')      !== -1 ||
+      rawDesc.indexOf('BALANCE TRANSFER') !== -1;
 
-    const postDate = txMatch[1].slice(0, 5); // normalise to DD/MM
-    const transDate = txMatch[2].slice(0, 5);
-    const rawDesc = txMatch[3].replace(/\s+/g, ' ').trim().toUpperCase();
-    const rawAmount = txMatch[4];
-
-    const isCredit = /CR$/i.test(rawAmount);
-    const isDebit  = /DR$/i.test(rawAmount); // some banks use DR suffix
-    const amount = parseFloat(
-      rawAmount
-        .replace(/(?:CR|DR)$/i, '')
-        .replace(/,/g, '')
+    var isPayment = !isSpaylaterOrInstalment && (
+      rawDesc.indexOf('PYMT@')      !== -1 ||
+      rawDesc.indexOf('PAYMENT')    !== -1 ||
+      rawDesc.indexOf('AUTOPAY')    !== -1 ||
+      rawDesc.indexOf('AUTO DEBIT') !== -1 ||
+      rawDesc.indexOf('AUTO-DEBIT') !== -1
     );
 
-    if (!amount || amount <= 0) {
-      continue;
-    }
+    var isCashback =
+      rawDesc.indexOf('CASH REBATE') !== -1 ||
+      rawDesc.indexOf('CASH BACK')   !== -1 ||
+      rawDesc.indexOf('CASHBACK')    !== -1 ||
+      rawDesc.indexOf('REBATE')      !== -1;
 
-    const isSpaylaterOrInstalment =
-      rawDesc.includes('SPAYLATER') ||
-      rawDesc.includes('INSTALMENT') ||
-      rawDesc.includes('INSTALLMENT') ||
-      rawDesc.includes('BALANCE TRANSFER');
-
-    const isPayment =
-      !isSpaylaterOrInstalment && (
-        rawDesc.includes('PYMT@') ||
-        rawDesc.includes('PAYMENT') ||
-        rawDesc.includes('AUTOPAY') ||
-        rawDesc.includes('AUTO DEBIT') ||
-        rawDesc.includes('AUTO-DEBIT')
-      );
-
-    const isCashback =
-      rawDesc.includes('CASH REBATE') ||
-      rawDesc.includes('CASH BACK') ||
-      rawDesc.includes('CASHBACK') ||
-      rawDesc.includes('REBATE');
-
-    // Cashback goes to Cashback Dashboard.
     if (isCashback) {
-      structuralCb.push({
-        cardInfo: cardInfo,
-        date: postDate,
-        amount: amount,
-        rawDesc: rawDesc
-      });
+      structuralCb.push({ cardInfo: cardInfo, date: postDate, amount: amount, rawDesc: rawDesc });
       continue;
     }
 
-    // Pure payments skip. AMEX SPAYLATER/INSTALMENT rows appear as CR but are real spending.
-    if (isPayment || (isCredit && !isDebit && !isSpaylaterOrInstalment)) {
-      continue;
-    }
+    if (isPayment || (isCredit && !isDebit && !isSpaylaterOrInstalment)) continue;
 
-    structuralTx.push({
-      postDate: postDate,
-      transDate: transDate,
-      cardInfo: cardInfo,
-      amount: amount,
-      rawDesc: rawDesc
-    });
+    structuralTx.push({ postDate: postDate, transDate: transDate, cardInfo: cardInfo, amount: amount, rawDesc: rawDesc });
   }
 }
 
     if (sections.length > 0) {
       sections.forEach(function (section, idx) {
         var start = section.index;
+        // For the last section (or only section), always read to end of document —
+        // transactions may appear many pages after the card-header line.
         var end = idx + 1 < sections.length ? sections[idx + 1].index : normalized.length;
         var blockText = normalized.slice(start, end);
 
         parseTransactionsInBlock(blockText, section.cardInfo);
       });
+
+      // BUG FIX: if only one section exists and no transactions were found in its block
+      // (e.g. card header on p.1, transactions on p.3+ with page-break noise between them),
+      // re-scan the entire document under the same card so nothing is missed.
+      if (structuralTx.length === 0 && sections.length === 1) {
+        parseTransactionsInBlock(normalized, sections[0].cardInfo);
+      }
     } else {
       var fallbackCardInfo = globalBankName + ' Pending Card Assignment';
       parseTransactionsInBlock(normalized, fallbackCardInfo);
