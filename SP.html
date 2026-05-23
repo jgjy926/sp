@@ -1840,8 +1840,10 @@ function resetPeriodFilter() {
      * NAME MAYBANK PRODUCT AMEX : 3791 861396 97262
      */
     // Dynamic section detector — works for Maybank, CIMB, PBB, RHB, HLB, AmBank, Citibank
-    var cardHeaderPattern = window.buildCardHeaderPattern ? window.buildCardHeaderPattern(globalBankName)
-      : '([A-Z][A-Z\s.\'\'-]{2,80}?)\s+(MAYBANK\s+(?:(?!YOUR COMBINED|KOMBINASI|Posting Date|TOTAL CREDIT|TOTAL DEBIT).){2,100}?(?:CARD|AMEX|AMERICAN EXPRESS))\s*:\s*((?:\d[\s-]?){12,19})';
+    // Call buildCardHeaderPattern directly (same IIFE scope) — window.buildCardHeaderPattern is
+    // not yet assigned when extractLocalStructure first runs, causing the fallback Maybank-only
+    // pattern to be used for every non-Maybank bank.
+    var cardHeaderPattern = buildCardHeaderPattern(globalBankName);
     var sectionRegex = new RegExp(cardHeaderPattern, 'gi');
 
     var sections = [];
@@ -2296,11 +2298,27 @@ function parseSourcedTransactions(aiString, rawText) {
     const enrichedTx = enrichMissingCardInfo(parsedTx, localData.globalBankName);
     transactions = transactions.concat(enrichedTx);
 
-    renderCardMappings();
+    // BUG FIX: renderCardMappings alone left analytics/console/cashback/chart stale.
+    // New entries were committed to the array but the UI never reflected them.
+    renderAll();
 
     showMessage(
       `Hybrid parse completed: ${enrichedTx.length} transactions loaded, including ${availableLocalTx.length} local fallback row(s).`
     );
+
+    // BUG FIX: show extraction results panel and navigate to analytics (mirrors
+    // what parseLocalTextRegex does via finishParsingUi).
+    var _sbHide = $('processing-status');
+    var _sbBar  = $('process-bar');
+    if (_sbBar) _sbBar.style.width = '100%';
+    setTimeout(function() {
+      if (_sbHide) _sbHide.classList.add('hidden');
+      var resultPanel = $('extraction-results');
+      if (resultPanel) resultPanel.classList.remove('hidden');
+      var title = $('parsed-summary-title');
+      if (title) title.innerText = selectedFileName ? 'Extracted from: ' + selectedFileName : 'Extracted Transactions';
+      setTimeout(function() { switchTab('analytics'); }, 600);
+    }, 300);
 
   } catch (e) {
     console.error('Hybrid merge failed. Falling back to local parser.', e);
