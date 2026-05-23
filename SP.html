@@ -504,6 +504,33 @@
                     </button>
                 </div>
 
+                <div class="glass-panel rounded-2xl border border-slate-700 overflow-hidden">
+                    <div class="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
+                        <div>
+                            <h3 class="font-semibold text-white flex items-center gap-2 text-sm">
+                                <i class="ph ph-credit-card text-emerald-400"></i> Card Display Name Mapping
+                            </h3>
+                            <p class="text-slate-400 text-xs mt-0.5">Canonical names from statement headers. Edit the display label shown in Analytics &amp; Cashback.</p>
+                        </div>
+                        <span id="card-mapping-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-medium ml-4 shrink-0">0 cards</span>
+                    </div>
+                    <div id="card-mapping-table-wrap" class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-300 min-w-[420px]">
+                            <thead class="bg-slate-800 text-slate-400">
+                                <tr>
+                                    <th class="px-4 py-2.5 font-medium text-xs w-28">Key (Bank-Last4)</th>
+                                    <th class="px-4 py-2.5 font-medium text-xs">Raw Detected Name</th>
+                                    <th class="px-4 py-2.5 font-medium text-xs">Display Label</th>
+                                    <th class="px-4 py-2.5 font-medium text-xs text-center w-20">Save</th>
+                                </tr>
+                            </thead>
+                            <tbody id="card-mapping-tbody" class="divide-y divide-slate-700/50">
+                                <tr><td colspan="4" class="p-6 text-center text-slate-500 text-xs">Parse a statement to populate card mappings.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="glass-panel p-5 rounded-2xl border border-slate-700">
                     <h3 class="font-semibold text-white mb-1 text-sm flex items-center gap-2">
                         <i class="ph ph-tag text-indigo-400"></i> Category Manager
@@ -833,6 +860,9 @@
   var rules = [];
   var transactions = [];
   var cashbacks = [];
+  // cardMappings: { "BANK-last4": "Display Label" }
+  // Master card name registry. Keys are canonical "BANK-XXXX" slugs.
+  var cardMappings = {};
 
   // Expose state for console debugging if needed
   window.__statementParserState = {
@@ -840,8 +870,54 @@
     get transactions() { return transactions; },
     get cashbacks() { return cashbacks; },
     get rules() { return rules; },
-    get appCategories() { return appCategories; }
+    get appCategories() { return appCategories; },
+    get cardMappings() { return cardMappings; }
   };
+
+  // -----------------------------
+  // Card Mapping Helpers
+  // -----------------------------
+
+  /**
+   * Canonical key from any card string: "UOB ONE CARD **** 7490" → "UOB-7490"
+   * Strips everything except the bank prefix word(s) and last 4 digits.
+   */
+  function cardKey(rawCard) {
+    var s = String(rawCard || '').toUpperCase().trim();
+    var m4 = s.match(/(\d{4})\s*$/);
+    var last4 = m4 ? m4[1] : '';
+    // First token(s) before any card number / asterisks / dashes
+    var bankPart = s.replace(/[\*\-\d\s]+$/, '').trim().split(/\s+/).slice(0, 2).join(' ');
+    if (!last4) return bankPart || s;
+    return bankPart + '-' + last4;
+  }
+
+  /**
+   * Returns the user-mapped display label for a card, or the raw value if none.
+   */
+  function resolveCardLabel(rawCard) {
+    var key = cardKey(rawCard);
+    return (cardMappings[key] && cardMappings[key].trim())
+      ? cardMappings[key]
+      : (rawCard || 'Unknown');
+  }
+
+  /**
+   * Register a card into mappings if not already present.
+   * Prefers longer / richer names (local parser names beat AI short names).
+   */
+  function registerCardMapping(rawCard) {
+    if (!rawCard || !rawCard.trim()) return;
+    var key = cardKey(rawCard);
+    var existing = cardMappings[key];
+    if (!existing || rawCard.length > existing.length) {
+      cardMappings[key] = rawCard.trim();
+    }
+  }
+
+  window.cardKey = cardKey;
+  window.resolveCardLabel = resolveCardLabel;
+  window.registerCardMapping = registerCardMapping;
 
   // -----------------------------
   // Safe helpers
@@ -1845,6 +1921,9 @@ const lines = String(blockText || '')
 
     matchedTransactions = enrichMissingCardInfo(matchedTransactions, localData.globalBankName);
 
+    // Register all locally-detected card names into the master mapping
+    Array.from(localData.cardsFound || []).forEach(registerCardMapping);
+
     var matchedCb = localData.structuralCb.map(function (c) {
       return {
         id: idCounter++,
@@ -1866,6 +1945,7 @@ const lines = String(blockText || '')
         matchedCb.length +
         ' cashback/rebate entries.'
       );
+      renderCardMappings();
     } else {
       toast('No transactional rows detected. Check Raw Text Inspector.');
     }
@@ -2038,8 +2118,13 @@ console.log('LOCAL STRUCTURE QA', {
       }
     });
 
+    // Register all locally-detected card names into the master mapping
+    Array.from(localData.cardsFound || []).forEach(registerCardMapping);
+
     const enrichedTx = enrichMissingCardInfo(parsedTx, localData.globalBankName);
     transactions = transactions.concat(enrichedTx);
+
+    renderCardMappings();
 
     showMessage(
       `Hybrid parse completed: ${enrichedTx.length} transactions loaded, including ${availableLocalTx.length} local fallback row(s).`
@@ -2962,6 +3047,7 @@ function reparseRawTextFromPanel() {
     renderAnalyticsCards();
     renderCashback();
     renderRulesTable();
+    renderCardMappings();
 
     if (currentTab === 'analytics') {
       initChart();
@@ -3035,7 +3121,7 @@ function reparseRawTextFromPanel() {
       return String(t.merchant || '').toLowerCase().indexOf(term) !== -1 ||
         String(t.mappedMerchant || '').toLowerCase().indexOf(term) !== -1 ||
         String(t.category || '').toLowerCase().indexOf(term) !== -1 ||
-        String(t.cardInfo || '').toLowerCase().indexOf(term) !== -1 ||
+        resolveCardLabel(t.cardInfo || '').toLowerCase().indexOf(term) !== -1 ||
         String(t.amount || '').indexOf(term) !== -1 ||
         String(t.postDate || '').indexOf(term) !== -1;
     });
@@ -3056,7 +3142,7 @@ function reparseRawTextFromPanel() {
           ? '<div class="text-[10px] text-slate-500 font-mono">T: ' + escapeHtml(t.transDate) + '</div>'
           : '') +
         '<div class="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 rounded px-1 mt-1 inline-block">' +
-        escapeHtml(t.cardInfo || 'Unknown') +
+        escapeHtml(resolveCardLabel(t.cardInfo || 'Unknown')) +
         '</div>' +
         '</td>' +
         '<td class="px-4 py-3 font-medium text-white">' + escapeHtml(t.mappedMerchant || t.merchant) + '</td>' +
@@ -3083,7 +3169,7 @@ function reparseRawTextFromPanel() {
         '<div class="space-y-1">' +
         '<div class="text-xs text-slate-400 font-mono">' + escapeHtml(t.postDate) +
         (t.transDate && t.transDate !== t.postDate ? ' <span class="text-slate-600">T:' + escapeHtml(t.transDate) + '</span>' : '') +
-        '<span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1 font-sans">' + escapeHtml(t.cardInfo || 'Unknown') + '</span>' +
+        '<span class="text-[9px] bg-slate-800 border border-slate-700 px-1 rounded ml-1 font-sans">' + escapeHtml(resolveCardLabel(t.cardInfo || 'Unknown')) + '</span>' +
         '</div>' +
         '<span class="inline-block text-[10px] bg-slate-800 px-2 py-0.5 border border-slate-700 text-indigo-300 rounded">' + escapeHtml(t.category) + '</span>' +
         '</div>' +
@@ -3139,7 +3225,7 @@ function reparseRawTextFromPanel() {
     if (term) {
       filtered = filtered.filter(function(c) {
         return String(c.merchant || '').toLowerCase().indexOf(term) !== -1 ||
-          String(c.card || c.cardInfo || '').toLowerCase().indexOf(term) !== -1 ||
+          resolveCardLabel(c.card || c.cardInfo || '').toLowerCase().indexOf(term) !== -1 ||
           String(c.date || '').indexOf(term) !== -1 ||
           String(c.amount || '').indexOf(term) !== -1;
       });
@@ -3150,7 +3236,7 @@ function reparseRawTextFromPanel() {
     var totalCashbackSum = 0;
 
     periodFiltered.forEach(function (c) {
-      var card = c.card || c.cardInfo || 'Unknown Statement';
+      var card = resolveCardLabel(c.card || c.cardInfo || 'Unknown Statement');
       if (!grouped[card]) grouped[card] = 0;
       grouped[card] += parseFloat(c.amount || 0);
       totalCashbackSum += parseFloat(c.amount || 0);
@@ -3194,7 +3280,7 @@ function reparseRawTextFromPanel() {
         '<div class="flex-1 min-w-0 pr-4">' +
         '<div class="font-medium text-white truncate">' + escapeHtml(c.merchant) + '</div>' +
         '<div class="text-xs text-slate-400 mt-0.5">' + escapeHtml(c.date) +
-        ' &bull; <span class="text-slate-500">' + escapeHtml(c.card || c.cardInfo || 'Unknown') + '</span>' +
+        ' &bull; <span class="text-slate-500">' + escapeHtml(resolveCardLabel(c.card || c.cardInfo || 'Unknown')) + '</span>' +
         '</div>' +
         '</div>' +
         '<div class="flex items-center gap-3 shrink-0">' +
@@ -3207,6 +3293,102 @@ function reparseRawTextFromPanel() {
         '</li>';
     });
   }
+
+  // -----------------------------
+  // Card Mapping Renderer
+  // -----------------------------
+  function renderCardMappings() {
+    var tbody = $('card-mapping-tbody');
+    var countBadge = $('card-mapping-count');
+    if (!tbody) return;
+
+    // Build a unified set of raw card names from all data sources
+    var rawCards = new Set();
+    transactions.forEach(function(t) { if (t.cardInfo) rawCards.add(t.cardInfo); });
+    cashbacks.forEach(function(c) { if (c.card) rawCards.add(c.card); if (c.cardInfo) rawCards.add(c.cardInfo); });
+    Object.values(cardMappings).forEach(function(v) { rawCards.add(v); });
+
+    // Group raw names by their canonical key
+    var byKey = {}; // key → { rawNames: Set, displayLabel }
+    rawCards.forEach(function(raw) {
+      if (!raw || !raw.trim()) return;
+      var key = cardKey(raw);
+      if (!byKey[key]) byKey[key] = { rawNames: new Set(), key: key };
+      byKey[key].rawNames.add(raw);
+      // Track longest raw name as canonical detected name
+      if (!byKey[key].longestRaw || raw.length > byKey[key].longestRaw.length) {
+        byKey[key].longestRaw = raw;
+      }
+      byKey[key].displayLabel = cardMappings[key] || byKey[key].longestRaw;
+    });
+
+    var keys = Object.keys(byKey);
+    if (countBadge) countBadge.innerText = keys.length + ' card' + (keys.length !== 1 ? 's' : '');
+
+    if (keys.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-slate-500 text-xs">Parse a statement to populate card mappings.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = '';
+    keys.sort().forEach(function(key) {
+      var entry = byKey[key];
+      var allRaw = Array.from(entry.rawNames).sort(function(a,b){ return b.length - a.length; });
+      var longestRaw = allRaw[0];
+      var currentLabel = cardMappings[key] || longestRaw;
+      var isDirty = currentLabel !== longestRaw;
+      var inputId = 'card-label-' + key.replace(/[^a-z0-9]/gi, '_');
+
+      tbody.innerHTML +=
+        '<tr class="hover:bg-slate-800/30 transition-colors">' +
+        '<td class="px-4 py-3 font-mono text-slate-500 text-[10px] select-all whitespace-nowrap">' + escapeHtml(key) + '</td>' +
+        '<td class="px-4 py-3">' +
+          '<div class="text-xs text-white font-medium truncate max-w-[180px]" title="' + escapeHtml(longestRaw) + '">' + escapeHtml(longestRaw) + '</div>' +
+          (allRaw.length > 1
+            ? '<div class="text-[10px] text-slate-500 mt-0.5">+' + (allRaw.length - 1) + ' variant(s)</div>'
+            : '') +
+        '</td>' +
+        '<td class="px-4 py-3">' +
+          '<input id="' + inputId + '" type="text" value="' + escapeHtml(currentLabel) + '" ' +
+          'data-key="' + escapeHtml(key) + '" data-raw="' + escapeHtml(longestRaw) + '" ' +
+          'class="w-full bg-slate-900 border ' + (isDirty ? 'border-emerald-600' : 'border-slate-700') + ' text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary transition-colors" ' +
+          'oninput="onCardLabelInput(this)" ' +
+          'onkeydown="if(event.key==='Enter')saveCardMapping(this.dataset.key,this.value)">' +
+        '</td>' +
+        '<td class="px-4 py-3 text-center">' +
+          '<button onclick="saveCardMapping('' + escapeHtml(key).replace(/'/g,"\'") + '',document.getElementById('' + inputId + '').value)" ' +
+          'class="px-2.5 py-1 bg-emerald-900/30 hover:bg-emerald-800/50 border border-emerald-700/50 text-emerald-300 text-xs rounded-lg transition-colors">Save</button>' +
+        '</td>' +
+        '</tr>';
+    });
+  }
+
+  function onCardLabelInput(input) {
+    // Highlight border when changed from original
+    var raw = input.dataset.raw || '';
+    if (input.value !== raw) {
+      input.classList.remove('border-slate-700');
+      input.classList.add('border-emerald-600');
+    } else {
+      input.classList.remove('border-emerald-600');
+      input.classList.add('border-slate-700');
+    }
+  }
+
+  function saveCardMapping(key, label) {
+    if (!key) return;
+    cardMappings[key] = (label || '').trim() || key;
+    toast('Card label updated. Refreshing…');
+    renderCardMappings();
+    renderCashback();
+    renderMasterTransactions();
+    renderAnalyticsCards();
+    if (currentTab === 'analytics' && typeof initChart === 'function') initChart();
+  }
+
+  window.renderCardMappings = renderCardMappings;
+  window.saveCardMapping = saveCardMapping;
+  window.onCardLabelInput = onCardLabelInput;
 
   function renderRulesTable() {
     var tbody = $('rules-table-body');
@@ -3427,7 +3609,8 @@ function reparseRawTextFromPanel() {
           transactions: transactions,
           cashbacks: cashbacks,
           rules: rules,
-          appCategories: appCategories
+          appCategories: appCategories,
+          cardMappings: cardMappings
         };
 
         localStorage.setItem('zero_cost_backup', JSON.stringify(backupData));
@@ -3447,6 +3630,7 @@ function reparseRawTextFromPanel() {
             cashbacks = backup.cashbacks || [];
             rules = backup.rules || [];
             appCategories = backup.appCategories || appCategories;
+            cardMappings = backup.cardMappings || {};
 
             renderCategories();
             renderAll();
@@ -3479,7 +3663,8 @@ function reparseRawTextFromPanel() {
           transactions: transactions,
           cashbacks: cashbacks,
           rules: rules,
-          appCategories: appCategories
+          appCategories: appCategories,
+          cardMappings: cardMappings
         })
       });
 
@@ -3492,6 +3677,7 @@ function reparseRawTextFromPanel() {
         cashbacks = data.backup.cashbacks || [];
         rules = data.backup.rules || [];
         appCategories = data.backup.appCategories || appCategories;
+        cardMappings = data.backup.cardMappings || {};
 
         renderCategories();
         renderAll();
