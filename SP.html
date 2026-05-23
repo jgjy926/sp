@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zero-Cost Statement Parser V4028</title>
+    <title>Zero-Cost Statement Parser V4703</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -262,7 +262,8 @@
   <div id="raw-text-container" class="hidden mt-3 pt-3 border-t border-slate-800">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-2">
       <p class="text-xs text-slate-400">
-        This is the exact text extracted locally by PDF.js. Use this panel for parser QA without pasting statement text into AI chat.
+        This is the exact text extracted locally by PDF.js.
+        <span class="text-amber-400 font-medium">Tip:</span> Find the line with your name + card number, select it, then click <button onclick="sendSelectedToWizard()" class="inline-flex items-center gap-1 text-amber-400 hover:text-amber-200 underline underline-offset-2 transition-colors"><i class="ph ph-magic-wand"></i> Send to Wizard</button> to auto-build the regex.
       </p>
 
       <div class="text-xs text-slate-500">
@@ -569,6 +570,256 @@
                     </div>
                 </div>
 
+                <!-- ═══ PARSER CONFIG PANEL ═══════════════════════════════════════ -->
+                <div class="glass-panel rounded-2xl border border-amber-500/30 bg-amber-950/10 overflow-hidden" id="parser-config-panel">
+                  <div class="p-4 border-b border-amber-500/20 bg-amber-950/20 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <i class="ph ph-sliders-horizontal text-amber-400 text-lg"></i>
+                      <div>
+                        <h3 class="font-semibold text-white text-sm">Parser Config</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">Tune how the local PDF parser reads your statement. Changes are saved instantly to browser storage.</p>
+                      </div>
+                    </div>
+                    <button onclick="resetParserConfig()" class="text-xs text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1">
+                      <i class="ph ph-arrow-counter-clockwise"></i> Reset defaults
+                    </button>
+                  </div>
+
+                  <div class="p-5 space-y-5">
+
+                    <!-- Row 1: numeric + toggles -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                      <!-- y-tolerance -->
+                      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700">
+                        <label class="block text-xs font-semibold text-amber-300 mb-1">Y-Tolerance (px)</label>
+                        <p class="text-[11px] text-slate-400 mb-2 leading-snug">How close (in PDF points) two text items must be on the y-axis to be treated as the same row. Increase if date/desc/amount end up split across lines.</p>
+                        <div class="flex items-center gap-3">
+                          <input type="range" id="cfg-y-tol" min="1" max="15" step="1" value="5"
+                            class="flex-1 accent-amber-400" oninput="syncParserConfig()">
+                          <span id="cfg-y-tol-val" class="text-white font-bold text-sm w-6 text-right">5</span>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-slate-600 mt-1"><span>1 (strict)</span><span>15 (loose)</span></div>
+                      </div>
+
+                      <!-- Dual-date split toggle -->
+                      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700 flex flex-col justify-between">
+                        <div>
+                          <label class="block text-xs font-semibold text-amber-300 mb-1">Dual-Date Split</label>
+                          <p class="text-[11px] text-slate-400 leading-snug">Inject a newline before <code class="text-emerald-400">DD/MM DD/MM DESC</code> sequences. Needed for most banks. Disable only if it causes mis-splits.</p>
+                        </div>
+                        <label class="flex items-center gap-2 mt-3 cursor-pointer">
+                          <input type="checkbox" id="cfg-dual-split" checked onchange="syncParserConfig()"
+                            class="w-4 h-4 accent-amber-400">
+                          <span class="text-xs text-slate-300">Enabled</span>
+                        </label>
+                      </div>
+
+                      <!-- Single-date split toggle -->
+                      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700 flex flex-col justify-between">
+                        <div>
+                          <label class="block text-xs font-semibold text-amber-300 mb-1">Single-Date Split (post-amount)</label>
+                          <p class="text-[11px] text-slate-400 leading-snug">Split a new row when <code class="text-emerald-400">DD/MM</code> appears right after an amount. Guards against cutting mid-description dates like <code class="text-emerald-400">ONLINE 01/05 TXN</code>.</p>
+                        </div>
+                        <label class="flex items-center gap-2 mt-3 cursor-pointer">
+                          <input type="checkbox" id="cfg-single-split" checked onchange="syncParserConfig()"
+                            class="w-4 h-4 accent-amber-400">
+                          <span class="text-xs text-slate-300">Enabled</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- Row 2: alwaysRescan + dateFormat -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                      <!-- alwaysRescan -->
+                      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700 flex flex-col justify-between">
+                        <div>
+                          <label class="block text-xs font-semibold text-amber-300 mb-1">Always Full-Document Rescan</label>
+                          <p class="text-[11px] text-slate-400 leading-snug">After the block scan, always re-parse the entire document to catch transactions that appear on pages well after the card header (e.g. UOB page 3+). Dedup prevents double-counting.</p>
+                        </div>
+                        <label class="flex items-center gap-2 mt-3 cursor-pointer">
+                          <input type="checkbox" id="cfg-always-rescan" checked onchange="syncParserConfig()"
+                            class="w-4 h-4 accent-amber-400">
+                          <span class="text-xs text-slate-300">Enabled (recommended for UOB)</span>
+                        </label>
+                      </div>
+
+                      <!-- dateFormat -->
+                      <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700">
+                        <label class="block text-xs font-semibold text-amber-300 mb-1">Date Format in Statement</label>
+                        <p class="text-[11px] text-slate-400 mb-2 leading-snug">Most Malaysian banks use <code class="text-emerald-400">DD/MM</code>. Change only if your statement uses US-style <code class="text-emerald-400">MM/DD</code>.</p>
+                        <select id="cfg-date-format" onchange="syncParserConfig()"
+                          class="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-xs focus:border-amber-400">
+                          <option value="DD/MM">DD/MM (default — Maybank, CIMB, UOB, PBB…)</option>
+                          <option value="MM/DD">MM/DD (US format)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Row 3: skip patterns -->
+                    <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700">
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-semibold text-amber-300">Skip Patterns (noise filter)</label>
+                        <button onclick="resetSkipPatterns()" class="text-[10px] text-slate-500 hover:text-amber-400 transition-colors">reset to default</button>
+                      </div>
+                      <p class="text-[11px] text-slate-400 mb-2 leading-snug">Pipe-separated regex patterns. Lines matching any of these are ignored during parsing. Add bank-specific noise here (e.g. <code class="text-emerald-400">FINANCE CHARGE|LATE PAYMENT</code>).</p>
+                      <textarea id="cfg-skip-patterns" rows="3" onchange="syncParserConfig()" oninput="syncParserConfig()"
+                        class="w-full bg-slate-950 border border-slate-700 text-emerald-400 text-xs font-mono rounded-lg p-3 focus:outline-none focus:border-amber-400 resize-y no-scrollbar"></textarea>
+                      <div id="cfg-skip-err" class="text-red-400 text-[10px] mt-1 hidden">Invalid regex — check for unbalanced parentheses or special characters.</div>
+                    </div>
+
+                    <!-- Row 4: bank header wizard -->
+                    <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700" id="wizard-wrap">
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                          <i class="ph ph-magic-wand text-amber-400"></i> Card Header Wizard
+                        </label>
+                        <button onclick="toggleWizardMode()" id="wizard-mode-btn"
+                          class="text-[10px] text-indigo-400 hover:text-indigo-200 transition-colors border border-indigo-500/30 px-2 py-0.5 rounded-full">
+                          Switch to manual regex
+                        </button>
+                      </div>
+
+                      <!-- WIZARD MODE -->
+                      <div id="wizard-mode">
+                        <p class="text-[11px] text-slate-400 mb-3 leading-snug">
+                          Paste one line from your PDF's Raw Text that contains the <strong class="text-white">cardholder name + card number</strong>.
+                          The wizard will detect the 3 parts and generate the regex for you.
+                        </p>
+
+                        <!-- Step 1: paste sample -->
+                        <div class="space-y-2">
+                          <label class="text-[10px] text-slate-400 uppercase tracking-wider">Step 1 — Paste the header line from Raw Text</label>
+                          <textarea id="wiz-sample" rows="2" placeholder="e.g.  AHMAD BIN ALI  UOB ONE CARD : 1234 5678 9012 3456"
+                            oninput="wizardDetect()"
+                            class="w-full bg-slate-950 border border-slate-700 text-white text-xs font-mono rounded-lg p-3 focus:outline-none focus:border-amber-400 resize-none no-scrollbar"></textarea>
+                        </div>
+
+                        <!-- Auto-detect result -->
+                        <div id="wiz-detect-result" class="hidden mt-3 space-y-3">
+                          <label class="text-[10px] text-slate-400 uppercase tracking-wider">Step 2 — Confirm the 3 detected parts</label>
+                          <div class="grid grid-cols-1 gap-2">
+
+                            <div class="flex items-center gap-2">
+                              <span class="text-[10px] text-slate-400 w-24 shrink-0">Owner name</span>
+                              <input id="wiz-owner" type="text"
+                                class="flex-1 bg-slate-800 border border-slate-600 text-emerald-300 text-xs font-mono rounded px-2 py-1.5 focus:outline-none focus:border-emerald-400"
+                                oninput="wizardBuild()">
+                              <span class="text-[10px] text-slate-500 w-32 text-right">(Group 1)</span>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                              <span class="text-[10px] text-slate-400 w-24 shrink-0">Card name</span>
+                              <input id="wiz-cardname" type="text"
+                                class="flex-1 bg-slate-800 border border-slate-600 text-indigo-300 text-xs font-mono rounded px-2 py-1.5 focus:outline-none focus:border-indigo-400"
+                                oninput="wizardBuild()">
+                              <span class="text-[10px] text-slate-500 w-32 text-right">(Group 2)</span>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                              <span class="text-[10px] text-slate-400 w-24 shrink-0">Card number</span>
+                              <input id="wiz-cardnum" type="text"
+                                class="flex-1 bg-slate-800 border border-slate-600 text-amber-300 text-xs font-mono rounded px-2 py-1.5 focus:outline-none focus:border-amber-400"
+                                oninput="wizardBuild()">
+                              <span class="text-[10px] text-slate-500 w-32 text-right">(Group 3)</span>
+                            </div>
+
+                          </div>
+
+                          <!-- Bank selector -->
+                          <div class="flex items-center gap-2 pt-1">
+                            <span class="text-[10px] text-slate-400 w-24 shrink-0">Bank</span>
+                            <select id="wiz-bank" onchange="wizardBuild()"
+                              class="flex-1 bg-slate-800 border border-slate-600 text-white text-xs rounded px-2 py-1.5 focus:border-amber-400">
+                              <option value="uob">UOB</option>
+                              <option value="maybank">Maybank</option>
+                              <option value="cimb">CIMB</option>
+                              <option value="publicbank">Public Bank</option>
+                              <option value="rhb">RHB</option>
+                              <option value="hlb">Hong Leong</option>
+                              <option value="ambank">AmBank</option>
+                              <option value="hsbc">HSBC</option>
+                              <option value="citibank">Citibank</option>
+                              <option value="standardchartered">Standard Chartered</option>
+                            </select>
+                          </div>
+
+                          <!-- Live preview -->
+                          <div class="mt-2">
+                            <label class="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Step 3 — Live test</label>
+                            <div id="wiz-test-row" class="bg-slate-950 rounded-lg p-3 text-xs font-mono leading-relaxed min-h-[36px]">
+                              <!-- highlighted test output here -->
+                            </div>
+                          </div>
+
+                          <!-- Generated regex -->
+                          <div>
+                            <label class="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Generated override</label>
+                            <div class="flex gap-2 items-stretch">
+                              <code id="wiz-output" class="flex-1 bg-slate-950 border border-slate-700 text-emerald-400 text-[11px] font-mono rounded-lg p-2.5 break-all leading-relaxed"></code>
+                              <button onclick="wizardApply()" id="wiz-apply-btn" disabled
+                                class="shrink-0 px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5">
+                                <i class="ph ph-check-bold"></i> Apply
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div id="wiz-no-detect" class="hidden mt-2 text-[11px] text-red-400 flex items-start gap-1.5">
+                          <i class="ph ph-warning-circle mt-0.5 shrink-0"></i>
+                          <span>Could not auto-detect the 3 parts. Try pasting just the one line that has the name + card number, or use manual mode.</span>
+                        </div>
+                      </div>
+
+                      <!-- MANUAL MODE -->
+                      <div id="manual-mode" class="hidden">
+                        <p class="text-[11px] text-slate-400 mb-2 leading-snug">
+                          Enter overrides as <code class="text-emerald-400">bankId:regex</code>, one per line.
+                          The regex needs <strong class="text-white">3 capture groups</strong>:
+                          <code class="text-emerald-400">(ownerName)</code>
+                          <code class="text-indigo-400">(cardProductName)</code>
+                          <code class="text-amber-400">(cardNumber)</code>.
+                        </p>
+                        <textarea id="cfg-bank-overrides" rows="3" onchange="syncParserConfig()" oninput="syncParserConfig()"
+                          placeholder="uob:YOUR_REGEX_HERE"
+                          class="w-full bg-slate-950 border border-slate-700 text-emerald-400 text-xs font-mono rounded-lg p-3 focus:outline-none focus:border-amber-400 resize-y no-scrollbar"></textarea>
+                        <div id="cfg-override-err" class="text-red-400 text-[10px] mt-1 hidden">Invalid regex in one of the overrides.</div>
+                      </div>
+
+                    </div>
+
+                    <!-- Row 5: debug toggle -->
+                    <div class="bg-slate-900/60 rounded-xl p-4 border border-slate-700 flex items-center justify-between">
+                      <div>
+                        <label class="block text-xs font-semibold text-amber-300 mb-0.5">Show Raw Extracted Text</label>
+                        <p class="text-[11px] text-slate-400">Always reveal the Raw Text panel after parsing so you can inspect exactly what the PDF extractor produced. Essential for debugging UOB issues.</p>
+                      </div>
+                      <label class="flex items-center gap-2 cursor-pointer ml-4">
+                        <input type="checkbox" id="cfg-show-raw" onchange="syncParserConfig()"
+                          class="w-4 h-4 accent-amber-400">
+                        <span class="text-xs text-slate-300">Show</span>
+                      </label>
+                    </div>
+
+                    <!-- Status bar -->
+                    <div class="flex items-center justify-between text-[11px] text-slate-500">
+                      <span id="cfg-save-status" class="text-emerald-400 hidden flex items-center gap-1"><i class="ph ph-check-circle"></i> Saved to browser storage</span>
+                      <span>Changes apply on next statement parse.</span>
+                      <div class="flex gap-2 ml-auto">
+                        <button onclick="cloudSyncAction('sync')" class="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-200 bg-indigo-900/20 border border-indigo-700/30 rounded-lg px-2.5 py-1 transition-colors">
+                          <i class="ph ph-cloud-arrow-up"></i> Push Rules to Cloud
+                        </button>
+                        <button onclick="cloudSyncAction('load')" class="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-200 bg-amber-900/20 border border-amber-700/30 rounded-lg px-2.5 py-1 transition-colors">
+                          <i class="ph ph-cloud-arrow-down"></i> Pull Rules from Cloud
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+                <!-- ═══ END PARSER CONFIG ══════════════════════════════════════════ -->
+
                 <div class="glass-panel rounded-2xl border border-slate-700 flex flex-col overflow-hidden">
                     <div class="p-4 border-b border-slate-700 bg-slate-800/50 flex justify-between items-center">
                         <h3 class="font-semibold text-white">Merchant Renaming & Mapping Rules</h3>
@@ -854,6 +1105,34 @@
     useAI: false,
     aiModel: 'gemini-2.5-flash'
   };
+
+  // ─── Parser Config (editable in Maintenance Hub > Parser Config panel) ────
+  var parserConfig = {
+    yTolerance:          5,
+    dualDateSplit:       true,
+    singleDateSplit:     true,
+    alwaysRescan:        true,
+    skipPatterns:        'RETAIL INTEREST RATE|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|JUMLAH|BALANCE B\/F|BALANCE C\/F|MINIMUM PAYMENT|CREDIT LIMIT|AVAILABLE CREDIT|STATEMENT DATE|PAGE \\d|POSTING DATE|TRANS DATE|TRANSACTION DATE',
+    bankHeaderOverrides: '',
+    dateFormat:          'DD/MM',
+    showRawText:         false
+  };
+
+  function loadParserConfig() {
+    try {
+      var saved = localStorage.getItem('zero_cost_parser_config');
+      if (saved) {
+        var obj = JSON.parse(saved);
+        Object.keys(parserConfig).forEach(function(k) {
+          if (Object.prototype.hasOwnProperty.call(obj, k)) parserConfig[k] = obj[k];
+        });
+      }
+    } catch(e) {}
+  }
+
+  function saveParserConfig() {
+    try { localStorage.setItem('zero_cost_parser_config', JSON.stringify(parserConfig)); } catch(e) {}
+  }
 
   var appCategories = [
     'Food & Beverage',
@@ -1222,6 +1501,11 @@ function resetPeriodFilter() {
     var activeSection = $('tab-' + tabId);
     if (activeSection) activeSection.classList.add('active');
 
+    // Populate Parser Config UI when user opens Maintenance tab
+    if (tabId === 'maintenance' && typeof populateParserConfigUI === 'function') {
+      populateParserConfigUI();
+    }
+
     document.querySelectorAll('.nav-btn').forEach(function (el) {
       el.classList.remove('text-white', 'bg-slate-800');
       el.classList.add('text-slate-400');
@@ -1466,7 +1750,14 @@ function resetPeriodFilter() {
         var rawPanel = $('raw-text-panel');
         var rawOutput = $('raw-text-output');
 
-        if (rawPanel) rawPanel.classList.remove('hidden');
+        // Show raw text panel if parserConfig.showRawText is on, otherwise keep it hidden
+        if (rawPanel) {
+          if (parserConfig && parserConfig.showRawText) {
+            rawPanel.classList.remove('hidden');
+          } else {
+            rawPanel.classList.add('hidden');
+          }
+        }
         if (rawOutput) rawOutput.value = extractedText;
         if (typeof updateRawTextCount === 'function') updateRawTextCount();
 
@@ -1503,7 +1794,7 @@ function resetPeriodFilter() {
    * This is more reliable than joining all text fragments with spaces.
    */
   function reconstructPageText(items) {
-    var tolerance = 2;
+    var tolerance = (parserConfig && typeof parserConfig.yTolerance === 'number') ? parserConfig.yTolerance : 5;
     var rows = [];
 
     (items || []).forEach(function (item) {
@@ -1912,18 +2203,31 @@ function parseTransactionsInBlock(blockText, cardInfo) {
   );
 
   // Noise patterns — lines to skip regardless of format
-  var NOISE_RX = /RETAIL INTEREST RATE|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|JUMLAH|BALANCE B\/F|BALANCE C\/F|MINIMUM PAYMENT|CREDIT LIMIT|AVAILABLE CREDIT|STATEMENT DATE|PAGE \d|POSTING DATE|TRANS(?:ACTION)? DATE/i;
+  // NOISE_RX — built from parserConfig.skipPatterns (editable in Maintenance > Parser Config)
+  var noisePatStr = (parserConfig && parserConfig.skipPatterns && parserConfig.skipPatterns.trim())
+    ? parserConfig.skipPatterns
+    : 'RETAIL INTEREST RATE|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|JUMLAH|BALANCE B\/F|BALANCE C\/F|MINIMUM PAYMENT|CREDIT LIMIT|AVAILABLE CREDIT|STATEMENT DATE|PAGE \\d|POSTING DATE|TRANS(?:ACTION)? DATE';
+  var NOISE_RX;
+  try { NOISE_RX = new RegExp(noisePatStr, 'i'); } catch(e) { NOISE_RX = /TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL/i; }
 
   // Pre-inject newlines before date-pairs that run together (no lookbehind — compatible)
   // Replace "  DD/MM DD/MM " runs that are preceded by a non-digit/slash character.
-  var raw = String(blockText || '')
-    .replace(/\r/g, '\n')
-    // Split where a date-pair starts after a non-date character mid-line
-    .replace(/([^\d\/\n])\s*(\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z])/g,
-             function(_, pre, dateStart) { return pre + '\n' + dateStart; })
-    // Also split where a single-date starts after non-date content
-    .replace(/([^\d\/\n])\s*(\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z]{2,})/g,
-             function(_, pre, dateStart) { return pre + '\n' + dateStart; });
+  var _doDual   = !(parserConfig && parserConfig.dualDateSplit   === false);
+  var _doSingle = !(parserConfig && parserConfig.singleDateSplit === false);
+
+  var raw = String(blockText || '').replace(/\r/g, '\n');
+
+  // Dual-date split (DD/MM DD/MM ALPHA) — unambiguously starts a new tx row
+  if (_doDual) {
+    raw = raw.replace(/([^\d\/\n])\s*(\d{2}\/\d{2}(?:\/\d{2,4})?\s+\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z])/g,
+      function(_, pre, dateStart) { return pre + '\n' + dateStart; });
+  }
+
+  // Single-date split — only after an amount ending (prevents mid-description cuts)
+  if (_doSingle) {
+    raw = raw.replace(/(\d{1,3}(?:,\d{3})*\.\d{2}(?:CR|DR)?)\s+(\d{2}\/\d{2}(?:\/\d{2,4})?\s+[A-Za-z])/g,
+      function(_, amtEnd, dateStart) { return amtEnd + '\n' + dateStart; });
+  }
 
   var lines = raw.split('\n')
     .map(function(l) { return l.replace(/[ \t]+/g, ' ').trim(); })
@@ -2010,10 +2314,15 @@ function parseTransactionsInBlock(blockText, cardInfo) {
         parseTransactionsInBlock(blockText, section.cardInfo);
       });
 
-      // BUG FIX: if only one section exists and no transactions were found in its block
-      // (e.g. card header on p.1, transactions on p.3+ with page-break noise between them),
-      // re-scan the entire document under the same card so nothing is missed.
-      if (structuralTx.length === 0 && sections.length === 1) {
+      // alwaysRescan: re-scan full document to catch page-3+ transactions.
+      // Controlled by parserConfig.alwaysRescan (default true for UOB-style banks).
+      var _alwaysRescan = !(parserConfig && parserConfig.alwaysRescan === false);
+      var _isUOBBank    = (globalBankName || '').toUpperCase().indexOf('UOB') !== -1;
+      var _shouldRescan = _alwaysRescan || _isUOBBank ||
+                          (structuralTx.length === 0 && sections.length === 1);
+      if (_shouldRescan && sections.length > 0) {
+        parseTransactionsInBlock(normalized, sections[0].cardInfo);
+      } else if (structuralTx.length === 0 && sections.length === 1) {
         parseTransactionsInBlock(normalized, sections[0].cardInfo);
       }
     } else {
@@ -2028,6 +2337,328 @@ function parseTransactionsInBlock(blockText, cardInfo) {
       globalBankName: globalBankName
     };
   }
+
+  loadParserConfig();
+
+  // ─── Parser Config Panel JS ───────────────────────────────────────────────
+
+  var DEFAULT_SKIP_PATTERNS = 'RETAIL INTEREST RATE|TOTAL CREDIT|TOTAL DEBIT|SUB TOTAL|JUMLAH|BALANCE B\/F|BALANCE C\/F|MINIMUM PAYMENT|CREDIT LIMIT|AVAILABLE CREDIT|STATEMENT DATE|PAGE \\d|POSTING DATE|TRANS DATE|TRANSACTION DATE';
+
+  function syncParserConfig() {
+    // Read all controls
+    var yTolEl    = document.getElementById('cfg-y-tol');
+    var yValEl    = document.getElementById('cfg-y-tol-val');
+    var dualEl    = document.getElementById('cfg-dual-split');
+    var singleEl  = document.getElementById('cfg-single-split');
+    var rescanEl  = document.getElementById('cfg-always-rescan');
+    var dateEl    = document.getElementById('cfg-date-format');
+    var skipEl    = document.getElementById('cfg-skip-patterns');
+    var overrEl   = document.getElementById('cfg-bank-overrides');
+    var rawEl     = document.getElementById('cfg-show-raw');
+    var skipErrEl = document.getElementById('cfg-skip-err');
+    var ovrErrEl  = document.getElementById('cfg-override-err');
+
+    if (yTolEl)  { parserConfig.yTolerance = parseInt(yTolEl.value, 10) || 5; }
+    if (yValEl && yTolEl) yValEl.textContent = yTolEl.value;
+    if (dualEl)   parserConfig.dualDateSplit   = dualEl.checked;
+    if (singleEl) parserConfig.singleDateSplit = singleEl.checked;
+    if (rescanEl) parserConfig.alwaysRescan    = rescanEl.checked;
+    if (dateEl)   parserConfig.dateFormat      = dateEl.value;
+    if (rawEl)    parserConfig.showRawText     = rawEl.checked;
+
+    // Validate skip patterns
+    var skipVal = skipEl ? skipEl.value.trim() : parserConfig.skipPatterns;
+    var skipOk = true;
+    try { if (skipVal) new RegExp(skipVal, 'i'); } catch(e) { skipOk = false; }
+    if (skipErrEl) skipErrEl.classList.toggle('hidden', skipOk);
+    if (skipOk) parserConfig.skipPatterns = skipVal;
+
+    // Validate bank overrides (each value after colon must be a valid regex)
+    var ovrVal = overrEl ? overrEl.value.replace(/\n/g, ',').split(',').filter(function(s){ return s.trim(); }).join(',') : '';
+    var ovrOk = true;
+    ovrVal.split(',').forEach(function(pair) {
+      var ci = pair.indexOf(':');
+      if (ci < 1) return;
+      try { new RegExp(pair.slice(ci+1).trim()); } catch(e) { ovrOk = false; }
+    });
+    if (ovrErrEl) ovrErrEl.classList.toggle('hidden', ovrOk);
+    if (ovrOk) parserConfig.bankHeaderOverrides = ovrVal;
+
+    saveParserConfig();
+
+    // Flash save status
+    var statusEl = document.getElementById('cfg-save-status');
+    if (statusEl) {
+      statusEl.classList.remove('hidden');
+      clearTimeout(statusEl._hideTimer);
+      statusEl._hideTimer = setTimeout(function() { statusEl.classList.add('hidden'); }, 2000);
+    }
+
+    // If showRawText changed, apply immediately
+    var rawPanel = document.getElementById('raw-text-panel');
+    if (rawPanel && parserConfig.showRawText) rawPanel.classList.remove('hidden');
+  }
+
+  function populateParserConfigUI() {
+    var yTolEl   = document.getElementById('cfg-y-tol');
+    var yValEl   = document.getElementById('cfg-y-tol-val');
+    var dualEl   = document.getElementById('cfg-dual-split');
+    var singleEl = document.getElementById('cfg-single-split');
+    var rescanEl = document.getElementById('cfg-always-rescan');
+    var dateEl   = document.getElementById('cfg-date-format');
+    var skipEl   = document.getElementById('cfg-skip-patterns');
+    var overrEl  = document.getElementById('cfg-bank-overrides');
+    var rawEl    = document.getElementById('cfg-show-raw');
+
+    if (yTolEl)  yTolEl.value   = parserConfig.yTolerance;
+    if (yValEl)  yValEl.textContent = parserConfig.yTolerance;
+    if (dualEl)  dualEl.checked   = parserConfig.dualDateSplit !== false;
+    if (singleEl) singleEl.checked = parserConfig.singleDateSplit !== false;
+    if (rescanEl) rescanEl.checked = parserConfig.alwaysRescan !== false;
+    if (dateEl)  dateEl.value    = parserConfig.dateFormat || 'DD/MM';
+    if (skipEl)  skipEl.value    = parserConfig.skipPatterns || DEFAULT_SKIP_PATTERNS;
+    if (overrEl) overrEl.value   = (parserConfig.bankHeaderOverrides || '').replace(/,/g, '\n');
+    if (rawEl)   rawEl.checked   = !!parserConfig.showRawText;
+  }
+
+  function resetParserConfig() {
+    parserConfig.yTolerance          = 5;
+    parserConfig.dualDateSplit       = true;
+    parserConfig.singleDateSplit     = true;
+    parserConfig.alwaysRescan        = true;
+    parserConfig.skipPatterns        = DEFAULT_SKIP_PATTERNS;
+    parserConfig.bankHeaderOverrides = '';
+    parserConfig.dateFormat          = 'DD/MM';
+    parserConfig.showRawText         = false;
+    saveParserConfig();
+    populateParserConfigUI();
+    if (typeof toast === 'function') toast('Parser config reset to defaults.');
+  }
+
+  function resetSkipPatterns() {
+    parserConfig.skipPatterns = DEFAULT_SKIP_PATTERNS;
+    var el = document.getElementById('cfg-skip-patterns');
+    if (el) el.value = DEFAULT_SKIP_PATTERNS;
+    saveParserConfig();
+  }
+
+
+  // ─── Card Header Wizard ───────────────────────────────────────────────────
+
+  var _wizardIsManual = false;
+
+  function toggleWizardMode() {
+    _wizardIsManual = !_wizardIsManual;
+    var wizEl  = document.getElementById('wizard-mode');
+    var manEl  = document.getElementById('manual-mode');
+    var btnEl  = document.getElementById('wizard-mode-btn');
+    if (!wizEl || !manEl) return;
+    wizEl.classList.toggle('hidden', _wizardIsManual);
+    manEl.classList.toggle('hidden', !_wizardIsManual);
+    if (btnEl) btnEl.textContent = _wizardIsManual ? 'Switch to wizard' : 'Switch to manual regex';
+  }
+
+  // Escape a literal string for use inside a regex
+  function escRx(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  }
+
+  // Try to auto-detect the 3 parts from a pasted header line
+  function wizardDetect() {
+    var sample = (document.getElementById('wiz-sample') || {}).value || '';
+    var detectResult = document.getElementById('wiz-detect-result');
+    var noDetect     = document.getElementById('wiz-no-detect');
+    if (!sample.trim()) {
+      if (detectResult) detectResult.classList.add('hidden');
+      if (noDetect)     noDetect.classList.add('hidden');
+      return;
+    }
+
+    // Pattern: NAME  BANK_PRODUCT  :  DIGITS  (with various separators)
+    // Try to find the card number first (12-19 digits, possibly spaced/dashed)
+    var numMatch = sample.match(/([\d][\d\s\-]{10,22}[\d])/);
+    if (!numMatch) {
+      if (detectResult) detectResult.classList.add('hidden');
+      if (noDetect)     noDetect.classList.remove('hidden');
+      return;
+    }
+
+    var cardNumRaw = numMatch[1].trim();
+    var beforeNum  = sample.slice(0, numMatch.index).replace(/[:\-]\s*$/, '').trim();
+
+    // Split beforeNum into owner (all-caps words at start) and card product
+    // Strategy: find the first token that looks like a bank keyword
+    var bankKeywords = /\b(UOB|MAYBANK|CIMB|PUBLIC|RHB|HONG LEONG|HLB|AMBANK|AM BANK|HSBC|CITI|STANDARD CHARTERED|SCB|ALLIANCE)\b/i;
+    var bankMatch = beforeNum.match(bankKeywords);
+    var owner = '', cardName = '';
+
+    if (bankMatch) {
+      owner    = beforeNum.slice(0, bankMatch.index).trim();
+      cardName = beforeNum.slice(bankMatch.index).trim();
+    } else {
+      // Fall back: split roughly in half at a whitespace boundary
+      var words = beforeNum.split(/\s+/);
+      var half  = Math.ceil(words.length / 2);
+      owner    = words.slice(0, half).join(' ');
+      cardName = words.slice(half).join(' ');
+    }
+
+    // Populate fields
+    var ownerEl    = document.getElementById('wiz-owner');
+    var cardnameEl = document.getElementById('wiz-cardname');
+    var cardnumEl  = document.getElementById('wiz-cardnum');
+
+    if (ownerEl)    ownerEl.value    = owner;
+    if (cardnameEl) cardnameEl.value = cardName;
+    if (cardnumEl)  cardnumEl.value  = cardNumRaw;
+
+    // Auto-select bank from card name
+    var bankEl = document.getElementById('wiz-bank');
+    if (bankEl && cardName) {
+      var cn = cardName.toUpperCase();
+      var bankMap = [
+        ['uob','UOB'],['maybank','MAYBANK'],['cimb','CIMB'],
+        ['publicbank','PUBLIC'],['rhb','RHB'],['hlb','HONG LEONG'],
+        ['ambank','AMBANK'],['hsbc','HSBC'],['citibank','CITI'],
+        ['standardchartered','STANDARD CHARTERED']
+      ];
+      for (var bi = 0; bi < bankMap.length; bi++) {
+        if (cn.indexOf(bankMap[bi][1]) !== -1) { bankEl.value = bankMap[bi][0]; break; }
+      }
+    }
+
+    if (detectResult) detectResult.classList.remove('hidden');
+    if (noDetect)     noDetect.classList.add('hidden');
+    wizardBuild();
+  }
+
+  function wizardBuild() {
+    var owner    = (document.getElementById('wiz-owner')    || {}).value || '';
+    var cardName = (document.getElementById('wiz-cardname') || {}).value || '';
+    var cardNum  = (document.getElementById('wiz-cardnum')  || {}).value || '';
+    var bank     = (document.getElementById('wiz-bank')     || {}).value || 'uob';
+    var sample   = (document.getElementById('wiz-sample')   || {}).value || '';
+
+    if (!owner && !cardName && !cardNum) return;
+
+    // Build a flexible regex:
+    // Group 1: owner — match any all-caps text around the detected name
+    // Group 2: card product — match anything between owner and separator
+    // Group 3: card number — digits with optional spaces/dashes
+    var ownerRx    = owner    ? "([A-Z][A-Z\\\\s.'\\\\-]{1,80}?)"  : "([A-Z][A-Z\\\\s.'\\\\-]{1,80}?)";
+    var cardNameRx = cardName ? '(' + escRx(cardName).replace(/[a-z]/gi, '[A-Za-z]') + '(?:[\\s\\S]{0,40}?)?)' : '([A-Z][\\s\\S]{2,80}?)';
+    var sepRx      = '\\s*[:\\-]\\s*';
+    var numRx      = '((?: ?\\d){12,19})';
+
+    var fullRx = ownerRx + '\\s+' + cardNameRx + sepRx + numRx;
+    var override = bank + ':' + fullRx;
+
+    // Show output
+    var outEl = document.getElementById('wiz-output');
+    if (outEl) outEl.textContent = override;
+
+    // Live test: apply to sample and highlight groups
+    var testEl = document.getElementById('wiz-test-row');
+    if (testEl && sample) {
+      try {
+        var rx = new RegExp(fullRx, 'i');
+        var m  = rx.exec(sample);
+        if (m) {
+          var highlighted = escapeHtml(sample)
+            .replace(escapeHtml(m[1] || ''), '<span class="bg-emerald-900/50 text-emerald-300 rounded px-0.5">' + escapeHtml(m[1] || '') + '</span>')
+            .replace(escapeHtml(m[2] || ''), '<span class="bg-indigo-900/50 text-indigo-300 rounded px-0.5">' + escapeHtml(m[2] || '') + '</span>')
+            .replace(escapeHtml(m[3] || ''), '<span class="bg-amber-900/50 text-amber-300 rounded px-0.5">' + escapeHtml(m[3] || '') + '</span>');
+          testEl.innerHTML =
+            '<span class="text-emerald-400 font-bold">✓ Match!</span>  ' + highlighted +
+            '<div class="mt-2 grid grid-cols-3 gap-1 text-[10px]">' +
+            '<div><span class="text-slate-500">Owner: </span><span class="text-emerald-300 font-mono">' + escapeHtml(m[1] || '') + '</span></div>' +
+            '<div><span class="text-slate-500">Card: </span><span class="text-indigo-300 font-mono">' + escapeHtml(m[2] || '') + '</span></div>' +
+            '<div><span class="text-slate-500">Number: </span><span class="text-amber-300 font-mono">' + escapeHtml(m[3] || '') + '</span></div>' +
+            '</div>';
+          var applyBtn = document.getElementById('wiz-apply-btn');
+          if (applyBtn) applyBtn.disabled = false;
+        } else {
+          testEl.innerHTML = '<span class="text-red-400">✗ No match yet</span> — adjust the fields above until it matches.';
+          var applyBtn = document.getElementById('wiz-apply-btn');
+          if (applyBtn) applyBtn.disabled = true;
+        }
+      } catch(e) {
+        testEl.innerHTML = '<span class="text-red-400">Regex error: ' + escapeHtml(e.message) + '</span>';
+      }
+    }
+  }
+
+  function wizardApply() {
+    var outEl = document.getElementById('wiz-output');
+    if (!outEl || !outEl.textContent.trim()) return;
+
+    var override = outEl.textContent.trim();
+    parserConfig.bankHeaderOverrides = override;
+    saveParserConfig();
+
+    // Switch to manual mode to show the applied value
+    _wizardIsManual = true;
+    var wizEl = document.getElementById('wizard-mode');
+    var manEl = document.getElementById('manual-mode');
+    var btnEl = document.getElementById('wizard-mode-btn');
+    if (wizEl) wizEl.classList.add('hidden');
+    if (manEl) manEl.classList.remove('hidden');
+    if (btnEl) btnEl.textContent = 'Switch to wizard';
+
+    var manTa = document.getElementById('cfg-bank-overrides');
+    if (manTa) manTa.value = override.replace(/,/g, '\n');
+
+    if (typeof toast === 'function') toast('Override applied! Re-parse your statement to test it.');
+  }
+
+  function sendSelectedToWizard() {
+    var rawEl = document.getElementById('raw-text-output');
+    var selected = '';
+    if (rawEl) {
+      var start = rawEl.selectionStart;
+      var end   = rawEl.selectionEnd;
+      selected  = (start !== end) ? rawEl.value.slice(start, end).trim() : '';
+      // If nothing selected, try to grab the first line that looks like a card header
+      if (!selected) {
+        var lines = rawEl.value.split('\n');
+        for (var li = 0; li < lines.length; li++) {
+          if (/[\d]{4}[\s\-]?[\d]{4}/.test(lines[li]) && /[A-Z]{3,}/.test(lines[li])) {
+            selected = lines[li].trim();
+            break;
+          }
+        }
+      }
+    }
+    if (!selected) {
+      if (typeof toast === 'function') toast('Select (highlight) the card header line in Raw Text first.');
+      return;
+    }
+    // Navigate to maintenance tab and populate wizard
+    if (typeof switchTab === 'function') switchTab('maintenance');
+    var wizTa = document.getElementById('wiz-sample');
+    if (wizTa) {
+      wizTa.value = selected;
+      wizardDetect();
+      // Scroll wizard into view
+      var wizWrap = document.getElementById('wizard-wrap');
+      if (wizWrap) setTimeout(function(){ wizWrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300);
+    }
+  }
+  window.sendSelectedToWizard = sendSelectedToWizard;
+
+  window.toggleWizardMode = toggleWizardMode;
+  window.wizardDetect     = wizardDetect;
+  window.wizardBuild      = wizardBuild;
+  window.wizardApply      = wizardApply;
+
+  // ─── End Card Header Wizard ───────────────────────────────────────────────
+
+  window.syncParserConfig      = syncParserConfig;
+  window.populateParserConfigUI = populateParserConfigUI;
+  window.resetParserConfig     = resetParserConfig;
+  window.resetSkipPatterns     = resetSkipPatterns;
+
+  // ─── End Parser Config Panel JS ──────────────────────────────────────────
 
   window.extractLocalStructure = extractLocalStructure;
 
@@ -2570,14 +3201,32 @@ function reparseRawTextFromPanel() {
   }
 
   function buildCardHeaderPattern(bankName) {
-    // Find the profile matching detected bank
+    // 1. Check parserConfig.bankHeaderOverrides first (user-defined, highest priority)
+    //    Format: comma-separated "bankId:regex" pairs, e.g. "uob:REGEX,cimb:REGEX"
+    if (parserConfig && parserConfig.bankHeaderOverrides && parserConfig.bankHeaderOverrides.trim()) {
+      var overrides = parserConfig.bankHeaderOverrides.split(',');
+      var bankIdLower = (bankName || '').toLowerCase().replace(/\s+/g, '');
+      for (var oi = 0; oi < overrides.length; oi++) {
+        var pair = overrides[oi].trim();
+        var colonIdx = pair.indexOf(':');
+        if (colonIdx < 1) continue;
+        var oId  = pair.slice(0, colonIdx).trim().toLowerCase().replace(/\s+/g, '');
+        var oRx  = pair.slice(colonIdx + 1).trim();
+        if (bankIdLower.indexOf(oId) !== -1 || oId.indexOf(bankIdLower) !== -1) {
+          return oRx; // user-supplied regex wins
+        }
+      }
+    }
+
+    // 2. Built-in profile
     var profile = BANK_PROFILES.find(function(p) {
       return p.name.toLowerCase() === (bankName || '').toLowerCase();
     });
     if (profile && profile.cardHeaderRx) {
       return profile.cardHeaderRx;
     }
-    // Generic fallback pattern
+
+    // 3. Generic fallback
     return '([A-Z][A-Z\\s.\'\'-]{2,80}?)\\s+([A-Z][A-Z\\s]{2,100}?(?:CARD|VISA|MASTERCARD|AMEX|AMERICAN EXPRESS|SPAYLATER))\\s*[:\\-]\\s*((?:\\d[\\s-]?){12,19})';
   }
 
@@ -3900,7 +4549,8 @@ function reparseRawTextFromPanel() {
           cashbacks: cashbacks,
           rules: rules,
           appCategories: appCategories,
-          cardMappings: cardMappings
+          cardMappings: cardMappings,
+          parserConfig: parserConfig
         };
 
         localStorage.setItem('zero_cost_backup', JSON.stringify(backupData));
@@ -3941,6 +4591,18 @@ function reparseRawTextFromPanel() {
             appCategories   = Array.isArray(backup.appCategories) ? backup.appCategories.filter(function(c) { return typeof c === 'string'; }) : appCategories;
             cardMappings    = safeObject(backup.cardMappings);
 
+            // Restore parserConfig (parse engine rules) safely
+            if (backup.parserConfig && typeof backup.parserConfig === 'object' && !Array.isArray(backup.parserConfig)) {
+              Object.keys(parserConfig).forEach(function(k) {
+                if (Object.prototype.hasOwnProperty.call(backup.parserConfig, k) &&
+                    backup.parserConfig[k] !== null && backup.parserConfig[k] !== undefined) {
+                  parserConfig[k] = backup.parserConfig[k];
+                }
+              });
+              saveParserConfig();
+              if (typeof populateParserConfigUI === 'function') populateParserConfigUI();
+            }
+
             renderCategories();
             renderAll();
 
@@ -3973,7 +4635,8 @@ function reparseRawTextFromPanel() {
           cashbacks: cashbacks,
           rules: rules,
           appCategories: appCategories,
-          cardMappings: cardMappings
+          cardMappings: cardMappings,
+          parserConfig: parserConfig
         })
       });
 
@@ -4001,6 +4664,18 @@ function reparseRawTextFromPanel() {
         rules         = safeArrayCloud(data.backup.rules);
         appCategories = Array.isArray(data.backup.appCategories) ? data.backup.appCategories.filter(function(c) { return typeof c === 'string'; }) : appCategories;
         cardMappings  = safeObjectCloud(data.backup.cardMappings);
+
+        // Restore parserConfig (parse engine rules) from cloud
+        if (data.backup.parserConfig && typeof data.backup.parserConfig === 'object' && !Array.isArray(data.backup.parserConfig)) {
+          Object.keys(parserConfig).forEach(function(k) {
+            if (Object.prototype.hasOwnProperty.call(data.backup.parserConfig, k) &&
+                data.backup.parserConfig[k] !== null && data.backup.parserConfig[k] !== undefined) {
+              parserConfig[k] = data.backup.parserConfig[k];
+            }
+          });
+          saveParserConfig();
+          if (typeof populateParserConfigUI === 'function') populateParserConfigUI();
+        }
 
         renderCategories();
         renderAll();
