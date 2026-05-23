@@ -1955,9 +1955,19 @@ console.log('LOCAL STRUCTURE QA', {
         upperRaw.includes('PAYMENT');
 
       if (isCashback) {
+        // Try to match against local cashback rows by date + amount to get the richer card name.
+        // AI often returns "UOB **** 7490" while local parser has "UOB ONE CARD **** 7490".
+        const localCbMatch = localData.structuralCb.find(lc =>
+          Number(lc.amount).toFixed(2) === Number(amt).toFixed(2) &&
+          String(lc.date) === String(date)
+        );
+        const resolvedCard = (localCbMatch && localCbMatch.cardInfo && localCbMatch.cardInfo.length > exactCardMatch.length)
+          ? localCbMatch.cardInfo
+          : exactCardMatch;
+
         cashbacks.push({
           id: idCounter++,
-          card: exactCardMatch,
+          card: resolvedCard,
           date: date,
           merchant: rawMerc,
           amount: amt
@@ -2002,13 +2012,20 @@ console.log('LOCAL STRUCTURE QA', {
     /**
      * Also keep locally detected cashback/rebate rows.
      * Prevent duplicate cashback if AI already added the same date/card/amount.
+     * Use last-4-digits match so "Maybank **** 7262" matches "Maybank 2 PLATINUM AMEX **** 7262".
      */
+    const last4 = s => { const m = String(s || '').match(/(\d{4})\s*$/); return m ? m[1] : ''; };
+
     localData.structuralCb.forEach(cb => {
-      const duplicateCb = cashbacks.some(existing =>
-        String(existing.card || existing.cardInfo) === String(cb.cardInfo) &&
-        String(existing.date) === String(cb.date) &&
-        Number(existing.amount).toFixed(2) === Number(cb.amount).toFixed(2)
-      );
+      const cbLast4 = last4(cb.cardInfo);
+      const duplicateCb = cashbacks.some(existing => {
+        const sameAmount = Number(existing.amount).toFixed(2) === Number(cb.amount).toFixed(2);
+        const sameDate   = String(existing.date) === String(cb.date);
+        if (!sameAmount || !sameDate) return false;
+        const existingLast4 = last4(existing.card || existing.cardInfo);
+        if (cbLast4 && existingLast4) return cbLast4 === existingLast4;
+        return String(existing.card || existing.cardInfo) === String(cb.cardInfo);
+      });
 
       if (!duplicateCb) {
         cashbacks.push({
