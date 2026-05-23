@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Zero-Cost Statement Parser V4703</title>
+    <title>Zero-Cost Statement Parser</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -2463,7 +2463,10 @@ function parseTransactionsInBlock(blockText, cardInfo) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
   }
 
-  // Try to auto-detect the 3 parts from a pasted header line
+  // Try to auto-detect the 3 parts from a pasted header line.
+  // Handles two layouts:
+  //   A) OWNER_NAME  CARD_PRODUCT  :  DIGITS          (most banks: Maybank, CIMB, PBB, RHB)
+  //   B) CARD_PRODUCT  **DIGITS**  OWNER_NAME         (UOB, some HSBC)
   function wizardDetect() {
     var sample = (document.getElementById('wiz-sample') || {}).value || '';
     var detectResult = document.getElementById('wiz-detect-result');
@@ -2474,9 +2477,9 @@ function parseTransactionsInBlock(blockText, cardInfo) {
       return;
     }
 
-    // Pattern: NAME  BANK_PRODUCT  :  DIGITS  (with various separators)
-    // Try to find the card number first (12-19 digits, possibly spaced/dashed)
-    var numMatch = sample.match(/([\d][\d\s\-]{10,22}[\d])/);
+    // Step 1: find card number token — accepts full digits, masked (****-XXXX),
+    // spaced groups, or mixed asterisks+digits with dashes.
+    var numMatch = sample.match(/([\*\d][\*\d\s\-]{10,22}[\*\d])/);
     if (!numMatch) {
       if (detectResult) detectResult.classList.add('hidden');
       if (noDetect)     noDetect.classList.remove('hidden');
@@ -2484,23 +2487,37 @@ function parseTransactionsInBlock(blockText, cardInfo) {
     }
 
     var cardNumRaw = numMatch[1].trim();
-    var beforeNum  = sample.slice(0, numMatch.index).replace(/[:\-]\s*$/, '').trim();
+    var numStart   = numMatch.index;
+    var numEnd     = numMatch.index + numMatch[0].length;
+    var beforeNum  = sample.slice(0, numStart).replace(/[\:\-\*\s]+$/, '').trim();
+    var afterNum   = sample.slice(numEnd).replace(/^[\:\-\*\s]+/, '').trim();
 
-    // Split beforeNum into owner (all-caps words at start) and card product
-    // Strategy: find the first token that looks like a bank keyword
-    var bankKeywords = /\b(UOB|MAYBANK|CIMB|PUBLIC|RHB|HONG LEONG|HLB|AMBANK|AM BANK|HSBC|CITI|STANDARD CHARTERED|SCB|ALLIANCE)\b/i;
-    var bankMatch = beforeNum.match(bankKeywords);
     var owner = '', cardName = '';
 
-    if (bankMatch) {
-      owner    = beforeNum.slice(0, bankMatch.index).trim();
-      cardName = beforeNum.slice(bankMatch.index).trim();
+    // Step 2: determine layout.
+    // If afterNum looks like a person name (all-caps, no card-product words), it is Layout B.
+    var looksLikeName = afterNum.length > 1 &&
+                        /^[A-Z][A-Z\s\.]{2,}$/.test(afterNum) &&
+                        !/(VISA|MASTER|AMEX|PLATINUM|GOLD|ONE|CARD|DEBIT|CREDIT|INFINITE|WORLD)/i.test(afterNum);
+
+    if (looksLikeName) {
+      // Layout B: CARD_NAME **NUMBER** OWNER
+      owner    = afterNum.trim();
+      cardName = beforeNum.trim();
     } else {
-      // Fall back: split roughly in half at a whitespace boundary
-      var words = beforeNum.split(/\s+/);
-      var half  = Math.ceil(words.length / 2);
-      owner    = words.slice(0, half).join(' ');
-      cardName = words.slice(half).join(' ');
+      // Layout A: OWNER  CARD_NAME  :  NUMBER
+      // Find first card-product keyword to split owner from card name.
+      var cardKeywords = /(VISA|MASTER(?:CARD)?|AMEX|AMERICAN EXPRESS|PLATINUM|GOLD|ONE|INFINITE|WORLD|DEBIT|CREDIT)/i;
+      var ckMatch = beforeNum.match(cardKeywords);
+      if (ckMatch) {
+        owner    = beforeNum.slice(0, ckMatch.index).trim();
+        cardName = beforeNum.slice(ckMatch.index).trim();
+      } else {
+        var words = beforeNum.split(/\s+/);
+        var half  = Math.ceil(words.length / 2);
+        owner    = words.slice(0, half).join(' ');
+        cardName = words.slice(half).join(' ');
+      }
     }
 
     // Populate fields
@@ -2508,22 +2525,22 @@ function parseTransactionsInBlock(blockText, cardInfo) {
     var cardnameEl = document.getElementById('wiz-cardname');
     var cardnumEl  = document.getElementById('wiz-cardnum');
 
-    if (ownerEl)    ownerEl.value    = owner;
-    if (cardnameEl) cardnameEl.value = cardName;
+    if (ownerEl)    ownerEl.value    = owner.trim();
+    if (cardnameEl) cardnameEl.value = cardName.trim();
     if (cardnumEl)  cardnumEl.value  = cardNumRaw;
 
-    // Auto-select bank from card name
+    // Auto-select bank by scanning full sample line
     var bankEl = document.getElementById('wiz-bank');
-    if (bankEl && cardName) {
-      var cn = cardName.toUpperCase();
+    if (bankEl) {
+      var haystack = sample.toUpperCase();
       var bankMap = [
         ['uob','UOB'],['maybank','MAYBANK'],['cimb','CIMB'],
-        ['publicbank','PUBLIC'],['rhb','RHB'],['hlb','HONG LEONG'],
+        ['publicbank','PUBLIC BANK'],['rhb','RHB'],['hlb','HONG LEONG'],
         ['ambank','AMBANK'],['hsbc','HSBC'],['citibank','CITI'],
         ['standardchartered','STANDARD CHARTERED']
       ];
       for (var bi = 0; bi < bankMap.length; bi++) {
-        if (cn.indexOf(bankMap[bi][1]) !== -1) { bankEl.value = bankMap[bi][0]; break; }
+        if (haystack.indexOf(bankMap[bi][1]) !== -1) { bankEl.value = bankMap[bi][0]; break; }
       }
     }
 
@@ -2541,39 +2558,84 @@ function parseTransactionsInBlock(blockText, cardInfo) {
 
     if (!owner && !cardName && !cardNum) return;
 
-    // Build a flexible regex:
-    // Group 1: owner — match any all-caps text around the detected name
-    // Group 2: card product — match anything between owner and separator
-    // Group 3: card number — digits with optional spaces/dashes
-    var ownerRx    = owner    ? "([A-Z][A-Z\\\\s.'\\\\-]{1,80}?)"  : "([A-Z][A-Z\\\\s.'\\\\-]{1,80}?)";
-    var cardNameRx = cardName ? '(' + escRx(cardName).replace(/[a-z]/gi, '[A-Za-z]') + '(?:[\\s\\S]{0,40}?)?)' : '([A-Z][\\s\\S]{2,80}?)';
-    var sepRx      = '\\s*[:\\-]\\s*';
-    var numRx      = '((?: ?\\d){12,19})';
+    // ── Detect layout from sample to know which order to build the regex ──
+    // Layout B: CARD_NAME **NUMBER** OWNER  (UOB style — number comes BEFORE owner)
+    // Layout A: OWNER  CARD_NAME  :  NUMBER (most other banks)
+    var isLayoutB = false;
+    if (sample && cardNum) {
+      var numIdx   = sample.indexOf(cardNum.replace(/\s+/g, '').slice(-4));
+      var ownerIdx = sample.lastIndexOf(owner.split(' ')[0] || '');
+      isLayoutB = ownerIdx > 0 && numIdx > 0 && ownerIdx > numIdx;
+    }
 
-    var fullRx = ownerRx + '\\s+' + cardNameRx + sepRx + numRx;
-    var override = bank + ':' + fullRx;
+    // ── Regex pieces ──────────────────────────────────────────────────────
+    // Owner: all-caps words, apostrophe/hyphen allowed, lazy
+    var ownerRx = "([A-Z][A-Z .'\\-]{1,60}?)";
+
+    // Card name: build a loose word-boundary pattern from the actual words,
+    // instead of escaping char-by-char (which produces the [A-Za-z][A-Za-z]... mess).
+    var cardNameRx;
+    if (cardName) {
+      // Split into words, escape each word, join with flexible whitespace
+      var wordRxParts = cardName.trim().split(/\s+/).map(function(w) {
+        return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      });
+      cardNameRx = '(' + wordRxParts.join('[\\s\\S]{0,8}?') + '[\\s\\S]{0,30}?)';
+    } else {
+      cardNameRx = '([A-Z][\\s\\S]{2,60}?)';
+    }
+
+    // Number: digits OR asterisks (****), groups separated by spaces or dashes
+    // Covers: 4111222233334444 / **** **** **** 7490 / 4141-5000-1111-7490 / ****-5000-1111-7490
+    var numRx = "([\\*\\d][\\*\\d][\\*\\d][\\*\\d][\\s\\-][\\*\\d][\\*\\d][\\*\\d][\\*\\d][\\s\\-][\\*\\d][\\*\\d][\\*\\d][\\*\\d][\\s\\-][\\*\\d\\d][\\*\\d][\\*\\d][\\*\\d]|(?:[\\*\\d] ?){12,19})";
+
+    // ── Assemble full regex based on layout ───────────────────────────────
+    var sepRx = "[\\s\\*\\-:]{1,4}";
+    // When owner is at end-of-line (Layout B), use greedy match + end anchor
+    // so lazy quantifier doesn't stop at first char.
+    var ownerRxEnd = "([A-Z][A-Z .'\\-]+)$";
+    var fullRx, override;
+
+    if (isLayoutB) {
+      // Layout B: CARD_NAME <sep> NUMBER <sep> OWNER  (UOB style)
+      fullRx   = cardNameRx + "\\s+" + sepRx + numRx + sepRx + "\\s*" + ownerRxEnd;
+    } else {
+      // Layout A: OWNER <whitespace> CARD_NAME <sep> NUMBER
+      fullRx   = ownerRx + "\\s+" + cardNameRx + "[\\s\\-:]{0,4}" + numRx;
+    }
+    override = bank + ':' + fullRx;
 
     // Show output
     var outEl = document.getElementById('wiz-output');
     if (outEl) outEl.textContent = override;
 
-    // Live test: apply to sample and highlight groups
+    // Live test
     var testEl = document.getElementById('wiz-test-row');
     if (testEl && sample) {
       try {
         var rx = new RegExp(fullRx, 'i');
         var m  = rx.exec(sample);
         if (m) {
-          var highlighted = escapeHtml(sample)
-            .replace(escapeHtml(m[1] || ''), '<span class="bg-emerald-900/50 text-emerald-300 rounded px-0.5">' + escapeHtml(m[1] || '') + '</span>')
-            .replace(escapeHtml(m[2] || ''), '<span class="bg-indigo-900/50 text-indigo-300 rounded px-0.5">' + escapeHtml(m[2] || '') + '</span>')
-            .replace(escapeHtml(m[3] || ''), '<span class="bg-amber-900/50 text-amber-300 rounded px-0.5">' + escapeHtml(m[3] || '') + '</span>');
+          // Map groups back: isLayoutB → g1=cardName, g2=number, g3=owner
+          //                  isLayoutA → g1=owner,    g2=cardName, g3=number
+          var grpOwner  = isLayoutB ? m[3] : m[1];
+          var grpCard   = isLayoutB ? m[1] : m[2];
+          var grpNum    = isLayoutB ? m[2] : m[3];
+          var hl = escapeHtml(sample);
+          // Highlight each group in its colour (safe simple replace)
+          function hlReplace(str, raw, cls) {
+            if (!raw) return str;
+            return str.replace(escapeHtml(raw), '<span class="' + cls + ' rounded px-0.5">' + escapeHtml(raw) + '</span>');
+          }
+          hl = hlReplace(hl, grpOwner, 'bg-emerald-900/50 text-emerald-300');
+          hl = hlReplace(hl, grpCard,  'bg-indigo-900/50 text-indigo-300');
+          hl = hlReplace(hl, grpNum,   'bg-amber-900/50 text-amber-300');
           testEl.innerHTML =
-            '<span class="text-emerald-400 font-bold">✓ Match!</span>  ' + highlighted +
+            '<span class="text-emerald-400 font-bold">✓ Match!</span>  ' + hl +
             '<div class="mt-2 grid grid-cols-3 gap-1 text-[10px]">' +
-            '<div><span class="text-slate-500">Owner: </span><span class="text-emerald-300 font-mono">' + escapeHtml(m[1] || '') + '</span></div>' +
-            '<div><span class="text-slate-500">Card: </span><span class="text-indigo-300 font-mono">' + escapeHtml(m[2] || '') + '</span></div>' +
-            '<div><span class="text-slate-500">Number: </span><span class="text-amber-300 font-mono">' + escapeHtml(m[3] || '') + '</span></div>' +
+            '<div><span class="text-slate-500">Owner: </span><span class="text-emerald-300 font-mono">' + escapeHtml(grpOwner || '') + '</span></div>' +
+            '<div><span class="text-slate-500">Card: </span><span class="text-indigo-300 font-mono">' + escapeHtml(grpCard || '') + '</span></div>' +
+            '<div><span class="text-slate-500">Number: </span><span class="text-amber-300 font-mono">' + escapeHtml(grpNum || '') + '</span></div>' +
             '</div>';
           var applyBtn = document.getElementById('wiz-apply-btn');
           if (applyBtn) applyBtn.disabled = false;
